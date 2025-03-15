@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthState, User, Role } from "@/types";
@@ -11,6 +10,7 @@ interface AuthContextType extends AuthState {
   loading: boolean;
   updateProfile: (profileData: any) => Promise<User | null>;
   changePassword: (passwordData: { currentPassword: string, newPassword: string }) => Promise<boolean>;
+  register: (userData: any) => Promise<boolean>;
 }
 
 const defaultAuthState: AuthState = {
@@ -30,7 +30,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check token validity and load user data
     const checkAuth = async () => {
       setLoading(true);
       const token = localStorage.getItem("authToken");
@@ -46,7 +45,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               role: user.role
             });
           } else {
-            // Clear invalid auth data
             setAuth(defaultAuthState);
             localStorage.removeItem("authToken");
             localStorage.removeItem("auth");
@@ -65,7 +63,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     checkAuth();
   }, []);
 
-  // Save auth state to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem("auth", JSON.stringify(auth));
   }, [auth]);
@@ -85,7 +82,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         setAuth(newAuthState);
         
-        // Navigate to appropriate dashboard
         if (response.user.role === "admin") {
           navigate("/admin/dashboard");
         } else {
@@ -99,6 +95,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     } catch (error) {
       console.error("Login error:", error);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const register = async (userData: any): Promise<boolean> => {
+    setLoading(true);
+    
+    try {
+      const user = await authService.register(userData);
+      
+      if (user) {
+        toast.success("Registration successful!");
+        return true;
+      } else {
+        return false;
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
       return false;
     } finally {
       setLoading(false);
@@ -157,7 +173,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         logout,
         loading,
         updateProfile,
-        changePassword
+        changePassword,
+        register
       }}
     >
       {children}

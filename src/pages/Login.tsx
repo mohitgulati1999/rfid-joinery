@@ -3,11 +3,19 @@ import React, { useState } from "react";
 import { Role } from "@/types";
 import RoleSelection from "@/components/auth/RoleSelection";
 import LoginForm from "@/components/auth/LoginForm";
+import RegisterForm from "@/components/auth/RegisterForm";
 import PageTransition from "@/components/shared/PageTransition";
 import { Moon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const Login = () => {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [isLogin, setIsLogin] = useState(true);
+
+  const handleResetView = () => {
+    setSelectedRole(null);
+    setIsLogin(true);
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-black">
@@ -21,7 +29,12 @@ const Login = () => {
         
         <div className="text-center mb-8">
           <p className="text-lg text-white/80 max-w-md mx-auto">
-            Sign in to access your daycare membership dashboard
+            {!selectedRole 
+              ? "Sign in or register to access your daycare dashboard" 
+              : isLogin 
+                ? "Sign in to access your daycare membership dashboard" 
+                : "Create a new account to join LaNeenos Daycare"
+            }
           </p>
         </div>
         
@@ -34,16 +47,29 @@ const Login = () => {
             />
           </>
         ) : (
-          <LoginForm selectedRole={selectedRole} />
-        )}
-        
-        {selectedRole && (
-          <button
-            onClick={() => setSelectedRole(null)}
-            className="mt-4 text-sm text-primary hover:underline"
-          >
-            Back to role selection
-          </button>
+          <>
+            {isLogin ? (
+              <LoginForm selectedRole={selectedRole} />
+            ) : (
+              <RegisterForm selectedRole={selectedRole} />
+            )}
+            
+            <div className="flex flex-col space-y-2 mt-4 items-center">
+              <button
+                onClick={() => setIsLogin(!isLogin)}
+                className="text-sm text-primary hover:underline"
+              >
+                {isLogin ? "Need an account? Register instead" : "Already have an account? Login instead"}
+              </button>
+              
+              <button
+                onClick={handleResetView}
+                className="text-sm text-primary/80 hover:underline"
+              >
+                Back to role selection
+              </button>
+            </div>
+          </>
         )}
       </PageTransition>
     </div>

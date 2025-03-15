@@ -31,8 +31,14 @@ export const authService = {
   
   register: async (userData: any): Promise<User | null> => {
     try {
-      const response = await api.post('/auth/register', userData);
-      return response.data.user;
+      // Choose the appropriate endpoint based on the role
+      const endpoint = userData.role === 'admin' 
+        ? '/users/admins' 
+        : '/users/members';
+      
+      const response = await api.post(endpoint, userData);
+      toast.success('Registration successful! Please login.');
+      return response.data.user || response.data.member || response.data.admin;
     } catch (error) {
       // Error handling is done in the api interceptor
       return null;
