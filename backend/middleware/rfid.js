@@ -33,4 +33,20 @@ const checkActive = async (req, res, next) => {
   next();
 };
 
-module.exports = { validateRFID, checkActive };
+// Check if member has sufficient hours
+const checkHoursAvailable = async (req, res, next) => {
+  const member = req.member;
+  
+  // Check if member has enough hours
+  if (member.totalHoursUsed >= member.membershipHours) {
+    return res.status(400).json({ 
+      msg: 'Insufficient hours available',
+      remainingHours: 0,
+      totalHours: member.membershipHours
+    });
+  }
+  
+  next();
+};
+
+module.exports = { validateRFID, checkActive, checkHoursAvailable };

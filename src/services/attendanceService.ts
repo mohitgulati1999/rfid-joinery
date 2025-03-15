@@ -26,7 +26,7 @@ export const attendanceService = {
   },
   
   // Check in a member by RFID
-  checkInMember: async (rfidNumber: string): Promise<Attendance> => {
+  checkInMember: async (rfidNumber: string): Promise<any> => {
     try {
       const response = await api.post('/attendance/checkin', { rfidNumber });
       return response.data;
@@ -45,5 +45,29 @@ export const attendanceService = {
       console.error('Error checking out member:', error);
       throw error;
     }
+  },
+
+  // Get current attendance statistics
+  getAttendanceStats: async (): Promise<any> => {
+    try {
+      const response = await api.get('/attendance/stats');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching attendance stats:', error);
+      throw error;
+    }
+  },
+  
+  // Get active check-ins
+  getCurrentAttendance: async (): Promise<Attendance[]> => {
+    try {
+      const response = await api.get('/attendance/current');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching current attendance:', error);
+      throw error;
+    }
   }
 };
+
+export default attendanceService;

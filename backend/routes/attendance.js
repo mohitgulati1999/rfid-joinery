@@ -4,7 +4,7 @@ const router = express.Router();
 const Attendance = require('../models/Attendance');
 const { Member } = require('../models/User');
 const { auth, adminAuth } = require('../middleware/auth');
-const { validateRFID, checkActive } = require('../middleware/rfid');
+const { validateRFID, checkActive, checkHoursAvailable } = require('../middleware/rfid');
 
 // @route   GET api/attendance
 // @desc    Get all attendance records (admin only)
@@ -40,7 +40,7 @@ router.get('/member/:id', auth, async (req, res) => {
 // @route   POST api/attendance/checkin
 // @desc    Check in a member by RFID
 // @access  Private (Admin)
-router.post('/checkin', adminAuth, validateRFID, checkActive, async (req, res) => {
+router.post('/checkin', adminAuth, validateRFID, checkActive, checkHoursAvailable, async (req, res) => {
   try {
     const member = req.member;
     
@@ -58,7 +58,9 @@ router.post('/checkin', adminAuth, validateRFID, checkActive, async (req, res) =
     const newAttendance = new Attendance({
       memberId: member._id,
       memberName: member.name,
-      checkInTime: new Date()
+      rfidNumber: member.rfidNumber,
+      checkInTime: new Date(),
+      checkInBy: req.user.id
     });
     
     const attendance = await newAttendance.save();
@@ -69,7 +71,8 @@ router.post('/checkin', adminAuth, validateRFID, checkActive, async (req, res) =
         id: member._id,
         name: member.name,
         totalHoursUsed: member.totalHoursUsed,
-        membershipHours: member.membershipHours
+        membershipHours: member.membershipHours,
+        remainingHours: member.membershipHours - member.totalHoursUsed
       }
     });
   } catch (err) {
@@ -103,11 +106,11 @@ router.put('/checkout', adminAuth, validateRFID, async (req, res) => {
     // Update attendance record
     activeSession.checkOutTime = checkOutTime;
     activeSession.hoursSpent = hoursSpent;
+    activeSession.checkOutBy = req.user.id;
     await activeSession.save();
     
-    // Update member's hours used
-    member.totalHoursUsed += hoursSpent;
-    await member.save();
+    // Update member's hours used through the useHours method
+    await member.useHours(hoursSpent, `Used for attendance from ${checkInTime.toLocaleString()} to ${checkOutTime.toLocaleString()}`);
     
     res.json({ 
       attendance: activeSession,
