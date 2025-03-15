@@ -28,9 +28,13 @@ export interface Attendance {
   id: string;
   memberId: string;
   memberName: string;
-  checkInTime: Date;
-  checkOutTime?: Date;
+  rfidNumber: string;
+  checkInTime: string;
+  checkOutTime?: string;
   hoursSpent?: number;
+  checkInBy?: string;
+  checkOutBy?: string;
+  notes?: string;
 }
 
 export interface MembershipPlan {
