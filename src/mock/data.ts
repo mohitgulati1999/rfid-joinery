@@ -109,32 +109,43 @@ export const mockAttendance: Attendance[] = [
     id: "att1",
     memberId: "mem1",
     memberName: "John Doe",
-    checkInTime: new Date("2023-06-01T09:00:00"),
-    checkOutTime: new Date("2023-06-01T11:30:00"),
-    hoursSpent: 2.5
+    rfidNumber: "RF123456",
+    checkInTime: "2023-06-01T09:00:00",
+    checkOutTime: "2023-06-01T11:30:00",
+    hoursSpent: 2.5,
+    checkInBy: "admin1",
+    checkOutBy: "admin1"
   },
   {
     id: "att2",
     memberId: "mem2",
     memberName: "Jane Smith",
-    checkInTime: new Date("2023-06-01T10:00:00"),
-    checkOutTime: new Date("2023-06-01T14:00:00"),
-    hoursSpent: 4
+    rfidNumber: "RF654321",
+    checkInTime: "2023-06-01T10:00:00",
+    checkOutTime: "2023-06-01T14:00:00",
+    hoursSpent: 4,
+    checkInBy: "admin1",
+    checkOutBy: "admin1"
   },
   {
     id: "att3",
     memberId: "mem1",
     memberName: "John Doe",
-    checkInTime: new Date("2023-06-02T09:30:00"),
-    checkOutTime: new Date("2023-06-02T12:30:00"),
-    hoursSpent: 3
+    rfidNumber: "RF123456",
+    checkInTime: "2023-06-02T09:30:00",
+    checkOutTime: "2023-06-02T12:30:00",
+    hoursSpent: 3,
+    checkInBy: "admin1",
+    checkOutBy: "admin1"
   },
   {
     id: "att4",
     memberId: "mem4",
     memberName: "Sarah Williams",
-    checkInTime: new Date("2023-06-02T13:00:00"),
-    checkOutTime: undefined
+    rfidNumber: "RF456789",
+    checkInTime: "2023-06-02T13:00:00",
+    checkOutTime: undefined,
+    checkInBy: "admin1"
   }
 ];
 
