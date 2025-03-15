@@ -1,7 +1,7 @@
 
 import api from './api';
 import { toast } from 'sonner';
-import { Role } from '@/types';
+import { Role, User } from '@/types';
 
 interface LoginCredentials {
   email: string;
@@ -11,7 +11,7 @@ interface LoginCredentials {
 
 interface LoginResponse {
   token: string;
-  user: any;
+  user: User;
 }
 
 export const authService = {
@@ -24,23 +24,56 @@ export const authService = {
       
       return response.data;
     } catch (error: any) {
-      const errorMsg = error.response?.data?.msg || 'Login failed';
-      toast.error(errorMsg);
+      // Error handling is done in the api interceptor
       return null;
     }
   },
   
-  getCurrentUser: async () => {
+  register: async (userData: any): Promise<User | null> => {
+    try {
+      const response = await api.post('/auth/register', userData);
+      return response.data.user;
+    } catch (error) {
+      // Error handling is done in the api interceptor
+      return null;
+    }
+  },
+  
+  getCurrentUser: async (): Promise<User | null> => {
     try {
       const response = await api.get('/auth/me');
       return response.data;
     } catch (error) {
-      console.error('Error fetching current user:', error);
       return null;
     }
   },
   
   logout: () => {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('auth');
+    toast.success('Logged out successfully');
+  },
+  
+  updateProfile: async (profileData: any): Promise<User | null> => {
+    try {
+      const response = await api.put('/users/profile', profileData);
+      return response.data;
+    } catch (error) {
+      // Error handling is done in the api interceptor
+      return null;
+    }
+  },
+  
+  changePassword: async (passwordData: { currentPassword: string, newPassword: string }): Promise<boolean> => {
+    try {
+      await api.put('/auth/password', passwordData);
+      toast.success('Password changed successfully');
+      return true;
+    } catch (error) {
+      // Error handling is done in the api interceptor
+      return false;
+    }
   }
 };
+
+export default authService;

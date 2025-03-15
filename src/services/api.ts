@@ -1,5 +1,5 @@
-
 import axios from 'axios';
+import { toast } from 'sonner';
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -23,15 +23,37 @@ api.interceptors.request.use(
   }
 );
 
-// Handle token expiration
+// Handle token expiration and responses
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Optional: Auto logout on 401 Unauthorized
-      // localStorage.removeItem('authToken');
-      // window.location.href = '/login';
+    if (error.response) {
+      // Unauthorized error handling
+      if (error.response.status === 401) {
+        // Clear token and redirect to login
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('auth');
+        
+        // Only redirect if not already on login page
+        if (!window.location.pathname.includes('/login')) {
+          toast.error('Session expired. Please login again.');
+          window.location.href = '/login';
+        }
+      }
+      
+      // Display error message from the server
+      const errorMessage = error.response.data?.msg || error.response.data?.message || 'An error occurred';
+      if (errorMessage) {
+        toast.error(errorMessage);
+      }
+    } else if (error.request) {
+      // No response received
+      toast.error('Network error. Please check your connection.');
+    } else {
+      // Other errors
+      toast.error('Request failed. Please try again later.');
     }
+    
     return Promise.reject(error);
   }
 );

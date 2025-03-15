@@ -4,6 +4,7 @@ const router = express.Router();
 const Attendance = require('../models/Attendance');
 const { Member } = require('../models/User');
 const { auth, adminAuth } = require('../middleware/auth');
+const { validateRFID, checkActive } = require('../middleware/rfid');
 
 // @route   GET api/attendance
 // @desc    Get all attendance records (admin only)
@@ -39,24 +40,9 @@ router.get('/member/:id', auth, async (req, res) => {
 // @route   POST api/attendance/checkin
 // @desc    Check in a member by RFID
 // @access  Private (Admin)
-router.post('/checkin', adminAuth, async (req, res) => {
-  const { rfidNumber } = req.body;
-  
-  if (!rfidNumber) {
-    return res.status(400).json({ msg: 'RFID number is required' });
-  }
-  
+router.post('/checkin', adminAuth, validateRFID, checkActive, async (req, res) => {
   try {
-    // Find member by RFID
-    const member = await Member.findOne({ rfidNumber });
-    
-    if (!member) {
-      return res.status(404).json({ msg: 'Member not found with this RFID' });
-    }
-    
-    if (!member.isActive) {
-      return res.status(400).json({ msg: 'Member account is inactive' });
-    }
+    const member = req.member;
     
     // Check if member already has an active session
     const activeSession = await Attendance.findOne({
@@ -77,7 +63,15 @@ router.post('/checkin', adminAuth, async (req, res) => {
     
     const attendance = await newAttendance.save();
     
-    res.json(attendance);
+    res.json({
+      attendance,
+      member: {
+        id: member._id,
+        name: member.name,
+        totalHoursUsed: member.totalHoursUsed,
+        membershipHours: member.membershipHours
+      }
+    });
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server error');
@@ -87,20 +81,9 @@ router.post('/checkin', adminAuth, async (req, res) => {
 // @route   PUT api/attendance/checkout
 // @desc    Check out a member by RFID
 // @access  Private (Admin)
-router.put('/checkout', adminAuth, async (req, res) => {
-  const { rfidNumber } = req.body;
-  
-  if (!rfidNumber) {
-    return res.status(400).json({ msg: 'RFID number is required' });
-  }
-  
+router.put('/checkout', adminAuth, validateRFID, async (req, res) => {
   try {
-    // Find member by RFID
-    const member = await Member.findOne({ rfidNumber });
-    
-    if (!member) {
-      return res.status(404).json({ msg: 'Member not found with this RFID' });
-    }
+    const member = req.member;
     
     // Find active session
     const activeSession = await Attendance.findOne({
@@ -135,6 +118,71 @@ router.put('/checkout', adminAuth, async (req, res) => {
         membershipHours: member.membershipHours,
         remainingHours: member.membershipHours - member.totalHoursUsed
       }
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// @route   GET api/attendance/current
+// @desc    Get all current check-ins (admin only)
+// @access  Private (Admin)
+router.get('/current', adminAuth, async (req, res) => {
+  try {
+    const currentAttendance = await Attendance.find({ checkOutTime: null });
+    res.json(currentAttendance);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// @route   GET api/attendance/stats
+// @desc    Get attendance statistics (admin only)
+// @access  Private (Admin)
+router.get('/stats', adminAuth, async (req, res) => {
+  try {
+    // Get count of members currently present
+    const presentCount = await Attendance.countDocuments({ checkOutTime: null });
+    
+    // Get total hours for today
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    const todayAttendance = await Attendance.find({
+      $or: [
+        { checkInTime: { $gte: startOfDay, $lte: endOfDay } },
+        { checkOutTime: null }
+      ]
+    });
+    
+    let totalHoursToday = 0;
+    
+    todayAttendance.forEach(record => {
+      if (record.hoursSpent) {
+        totalHoursToday += record.hoursSpent;
+      } else if (!record.checkOutTime) {
+        // For active sessions, calculate hours spent so far
+        const now = new Date();
+        const checkIn = new Date(record.checkInTime);
+        const hoursSpentSoFar = parseFloat(((now - checkIn) / (1000 * 60 * 60)).toFixed(2));
+        totalHoursToday += hoursSpentSoFar;
+      }
+    });
+    
+    // Get last check-in
+    const lastCheckIn = await Attendance.findOne({})
+      .sort({ checkInTime: -1 })
+      .limit(1);
+    
+    res.json({
+      presentCount,
+      totalHoursToday,
+      lastCheckIn
     });
   } catch (err) {
     console.error(err.message);

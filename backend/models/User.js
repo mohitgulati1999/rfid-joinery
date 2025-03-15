@@ -63,15 +63,24 @@ const memberSchema = new mongoose.Schema({
   rfidNumber: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    validate: {
+      validator: function(v) {
+        // Validate RFID format (e.g., RF followed by 6 digits)
+        return /^RF\d{6}$/.test(v);
+      },
+      message: props => `${props.value} is not a valid RFID number! Format should be RF followed by 6 digits.`
+    }
   },
   membershipHours: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   totalHoursUsed: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   membershipPlanId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -80,8 +89,56 @@ const memberSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
-  }
+  },
+  hoursHistory: [{
+    hours: Number,
+    type: {
+      type: String,
+      enum: ['added', 'used'],
+      required: true
+    },
+    date: {
+      type: Date,
+      default: Date.now
+    },
+    notes: String
+  }]
 });
+
+// Method to add hours to a member
+memberSchema.methods.addHours = async function(hoursToAdd, notes = '') {
+  this.membershipHours += hoursToAdd;
+  
+  this.hoursHistory.push({
+    hours: hoursToAdd,
+    type: 'added',
+    notes
+  });
+  
+  return this.save();
+};
+
+// Method to use hours from a member
+memberSchema.methods.useHours = async function(hoursToUse, notes = '') {
+  this.totalHoursUsed += hoursToUse;
+  
+  this.hoursHistory.push({
+    hours: hoursToUse,
+    type: 'used',
+    notes
+  });
+  
+  return this.save();
+};
+
+// Virtual for remaining hours
+memberSchema.virtual('remainingHours').get(function() {
+  return Math.max(0, this.membershipHours - this.totalHoursUsed);
+});
+
+// Configure virtuals to be included in the JSON output
+memberSchema.set('toJSON', { virtuals: true });
+memberSchema.set('toObject', { virtuals: true });
 
 const Member = User.discriminator('member', memberSchema);
 
@@ -89,6 +146,24 @@ const Member = User.discriminator('member', memberSchema);
 const adminSchema = new mongoose.Schema({
   position: {
     type: String
+  },
+  permissions: {
+    manageUsers: {
+      type: Boolean,
+      default: true
+    },
+    manageAttendance: {
+      type: Boolean,
+      default: true
+    },
+    managePayments: {
+      type: Boolean,
+      default: true
+    },
+    manageMemberships: {
+      type: Boolean,
+      default: true
+    }
   }
 });
 
