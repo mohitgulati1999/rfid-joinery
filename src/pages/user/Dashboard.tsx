@@ -128,9 +128,9 @@ const UserDashboard: React.FC = () => {
         )}
       </div>
       
-      {/* Premium Credit Card Display */}
+      {/* Premium Credit Card Display - Fixed by adding the member prop */}
       <div className="mb-8">
-        <CreditCard member={member} />
+        <CreditCard member={member} className="" />
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -182,7 +182,7 @@ const UserDashboard: React.FC = () => {
               className="w-full"
               onClick={() => navigate('/user/payments')}
             >
-              <CreditCard className="mr-2 h-4 w-4" />
+              <CreditCardIcon className="mr-2 h-4 w-4" />
               Buy More Hours
             </Button>
           </div>
@@ -348,7 +348,7 @@ const UserDashboard: React.FC = () => {
                   className="w-full"
                   onClick={() => navigate('/user/payments')}
                 >
-                  <CreditCard className="mr-2 h-4 w-4" />
+                  <CreditCardIcon className="mr-2 h-4 w-4" />
                   Request Hours
                 </Button>
               </div>

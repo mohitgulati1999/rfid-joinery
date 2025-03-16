@@ -13,6 +13,7 @@ import {
   SidebarGroupContent,
   SidebarGroup,
   SidebarGroupLabel,
+  SidebarRail,
 } from "@/components/ui/sidebar";
 import {
   Home,
@@ -22,7 +23,6 @@ import {
   User,
   LogOut,
   Settings,
-  Moon,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -90,10 +90,13 @@ const AppSidebar = () => {
       variant="sidebar"
       collapsible="icon"
     >
+      {/* Add the rail to enable the middle toggle button */}
+      <SidebarRail />
+      
       <SidebarHeader className="flex flex-col items-center justify-center p-4 border-b border-white/10">
-        <SidebarTrigger className="absolute right-2 top-2" />
+        {/* Removed the trigger from here */}
         <div className="flex items-center space-x-2 py-2">
-          <Moon className="h-6 w-6 text-primary" />
+          {/* Removed the Moon icon */}
           <span className="text-xl font-bold text-white">LaNeenos Daycare</span>
         </div>
         
