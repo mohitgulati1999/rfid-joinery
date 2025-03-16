@@ -5,8 +5,9 @@ import RoleSelection from "@/components/auth/RoleSelection";
 import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
 import PageTransition from "@/components/shared/PageTransition";
-import { Moon } from "lucide-react";
+import { Moon, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const Login = () => {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
@@ -26,6 +27,14 @@ const Login = () => {
             LaNeenos Daycare
           </h1>
         </div>
+        
+        <Alert className="mb-6 max-w-md mx-auto bg-amber-500/10 border-amber-500/20 text-amber-200">
+          <Info className="h-4 w-4 text-amber-500" />
+          <AlertTitle>Auth Bypass Active</AlertTitle>
+          <AlertDescription>
+            Authentication is currently bypassed for testing. Any credentials will work.
+          </AlertDescription>
+        </Alert>
         
         <div className="text-center mb-8">
           <p className="text-lg text-white/80 max-w-md mx-auto">

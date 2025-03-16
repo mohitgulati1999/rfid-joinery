@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { toast } from 'sonner';
 
@@ -9,13 +10,17 @@ const api = axios.create({
   }
 });
 
-// Add token to requests if available
+// BYPASS API CALLS: Add interceptor that mocks responses
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('authToken');
     if (token) {
       config.headers['x-auth-token'] = token;
     }
+    
+    // For testing, log API calls to console
+    console.log(`API ${config.method?.toUpperCase()} request to ${config.url}`);
+    
     return config;
   },
   (error) => {

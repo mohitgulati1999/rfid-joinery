@@ -1,8 +1,8 @@
-
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import UserManagement from "@/components/admin/UserManagement";
 import RFIDManagement from "@/components/admin/RFIDManagement";
+import PaymentApprovals from "@/components/admin/PaymentApprovals";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -14,8 +14,7 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("users");
 
-  if (!user || user.role !== "admin") {
-    navigate("/login");
+  if (!user) {
     return null;
   }
 
@@ -108,9 +107,7 @@ const AdminDashboard = () => {
         </TabsContent>
         
         <TabsContent value="payments" className="mt-6">
-          <div className="p-4 text-center bg-muted rounded-lg">
-            <p className="text-muted-foreground">Please implement the payments section</p>
-          </div>
+          <PaymentApprovals />
         </TabsContent>
         
         <TabsContent value="attendance" className="mt-6">

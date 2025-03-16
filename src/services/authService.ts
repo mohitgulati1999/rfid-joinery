@@ -16,42 +16,82 @@ interface LoginResponse {
 
 export const authService = {
   login: async (credentials: LoginCredentials): Promise<LoginResponse | null> => {
-    try {
-      const response = await api.post('/auth/login', credentials);
-      
-      // Save token to localStorage
-      localStorage.setItem('authToken', response.data.token);
-      
-      return response.data;
-    } catch (error: any) {
-      // Error handling is done in the api interceptor
-      return null;
-    }
+    // BYPASS AUTHENTICATION: No actual API call, just return mock data
+    const mockToken = "mock-auth-token-for-testing";
+    const mockUser: User = {
+      id: "mock-user-id",
+      email: credentials.email || "test@example.com",
+      name: credentials.email ? credentials.email.split('@')[0] : "Test User",
+      role: credentials.role || "member",
+      // Add relevant fields based on role
+      ...(credentials.role === "member" && {
+        rfidNumber: "RF123456",
+        membershipHours: 50,
+        totalHoursUsed: 15,
+        isActive: true,
+        remainingHours: 35,
+      })
+    };
+    
+    // Store the mock token in localStorage
+    localStorage.setItem('authToken', mockToken);
+    
+    toast.success("Logged in successfully! (Auth bypass active)");
+    return {
+      token: mockToken,
+      user: mockUser
+    };
   },
   
   register: async (userData: any): Promise<User | null> => {
-    try {
-      // Choose the appropriate endpoint based on the role
-      const endpoint = userData.role === 'admin' 
-        ? '/users/admins' 
-        : '/users/members';
-      
-      const response = await api.post(endpoint, userData);
-      toast.success('Registration successful! Please login.');
-      return response.data.user || response.data.member || response.data.admin;
-    } catch (error) {
-      // Error handling is done in the api interceptor
-      return null;
-    }
+    // BYPASS AUTHENTICATION: No actual API call, just return mock data
+    const mockUser: User = {
+      id: "mock-user-id-" + Math.random().toString(36).substring(7),
+      email: userData.email || "newuser@example.com",
+      name: userData.name || "New User",
+      role: userData.role || "member",
+      // Add relevant fields based on role
+      ...(userData.role === "member" && {
+        rfidNumber: userData.rfidNumber || "RF" + Math.floor(100000 + Math.random() * 900000),
+        membershipHours: userData.membershipHours || 50,
+        totalHoursUsed: 0,
+        isActive: true,
+        remainingHours: userData.membershipHours || 50,
+      })
+    };
+    
+    toast.success('Registration successful! Please login.');
+    return mockUser;
   },
   
   getCurrentUser: async (): Promise<User | null> => {
-    try {
-      const response = await api.get('/auth/me');
-      return response.data;
-    } catch (error) {
+    // BYPASS AUTHENTICATION: Check if we have a token and return mock user
+    const token = localStorage.getItem('authToken');
+    
+    if (!token) {
       return null;
     }
+
+    // Get stored user or create default mock user
+    const storedAuth = localStorage.getItem('auth');
+    const parsedAuth = storedAuth ? JSON.parse(storedAuth) : null;
+    
+    if (parsedAuth && parsedAuth.user) {
+      return parsedAuth.user;
+    }
+    
+    // Default mock user if no stored user
+    return {
+      id: "default-mock-user",
+      email: "default@example.com",
+      name: "Default User",
+      role: "member",
+      rfidNumber: "RF123456",
+      membershipHours: 50,
+      totalHoursUsed: 15,
+      isActive: true,
+      remainingHours: 35,
+    };
   },
   
   logout: () => {
@@ -61,24 +101,26 @@ export const authService = {
   },
   
   updateProfile: async (profileData: any): Promise<User | null> => {
-    try {
-      const response = await api.put('/users/profile', profileData);
-      return response.data;
-    } catch (error) {
-      // Error handling is done in the api interceptor
-      return null;
+    // BYPASS AUTHENTICATION: Update the stored user data
+    const storedAuth = localStorage.getItem('auth');
+    const parsedAuth = storedAuth ? JSON.parse(storedAuth) : null;
+    
+    if (parsedAuth && parsedAuth.user) {
+      const updatedUser = { ...parsedAuth.user, ...profileData };
+      const updatedAuth = { ...parsedAuth, user: updatedUser };
+      
+      localStorage.setItem('auth', JSON.stringify(updatedAuth));
+      toast.success('Profile updated successfully');
+      return updatedUser;
     }
+    
+    return null;
   },
   
   changePassword: async (passwordData: { currentPassword: string, newPassword: string }): Promise<boolean> => {
-    try {
-      await api.put('/auth/password', passwordData);
-      toast.success('Password changed successfully');
-      return true;
-    } catch (error) {
-      // Error handling is done in the api interceptor
-      return false;
-    }
+    // BYPASS AUTHENTICATION: Always return success
+    toast.success('Password changed successfully (Auth bypass active)');
+    return true;
   }
 };
 
