@@ -1,7 +1,7 @@
 
 import React from "react";
 import { Member } from "@/types";
-import { Moon, CreditCard as CreditCardIcon, Cpu } from "lucide-react";
+import { Moon, CreditCard as CreditCardIcon, Cpu, Star } from "lucide-react";
 
 interface CreditCardProps {
   member: Member;
@@ -9,11 +9,11 @@ interface CreditCardProps {
 
 const CreditCard = ({ member }: CreditCardProps) => {
   return (
-    <div className="credit-card p-6 w-full max-w-md mx-auto relative overflow-hidden bg-gradient-to-br from-blue-950/90 to-indigo-900/90 shadow-xl rounded-xl backdrop-blur-sm border border-white/10">
+    <div className="credit-card p-6 w-full max-w-md mx-auto relative overflow-hidden bg-gradient-to-br from-purple-950/90 to-indigo-900/90 shadow-xl rounded-xl backdrop-blur-sm border border-white/10">
       <div className="flex justify-between items-start mb-10">
         <div className="flex items-center space-x-2">
-          <Moon className="h-6 w-6 text-blue-400" />
-          <span className="text-lg font-bold text-white/90">RFID Daycare</span>
+          <Star className="h-6 w-6 text-yellow-400" />
+          <span className="text-lg font-bold text-white/90">La Neenos Daycare</span>
         </div>
         <div className="flex flex-col items-end">
           <span className="text-xs text-white/60">Membership</span>
@@ -48,8 +48,11 @@ const CreditCard = ({ member }: CreditCardProps) => {
       </div>
       
       {/* Add subtle visual elements for glassmorphism effect */}
-      <div className="absolute -top-20 -left-20 w-40 h-40 rounded-full bg-blue-500/10 blur-xl"></div>
+      <div className="absolute -top-20 -left-20 w-40 h-40 rounded-full bg-purple-500/10 blur-xl"></div>
       <div className="absolute -bottom-20 -right-20 w-40 h-40 rounded-full bg-indigo-500/10 blur-xl"></div>
+      
+      {/* Add holographic effect */}
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300"></div>
     </div>
   );
 };

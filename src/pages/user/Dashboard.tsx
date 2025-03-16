@@ -7,9 +7,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Member, Attendance, MembershipPlan } from "@/types";
 import GlassMorphismCard from "@/components/shared/GlassMorphismCard";
+import CreditCard from "@/components/user/CreditCard";
 import { 
   Clock, 
-  CreditCard, 
+  CreditCard as CreditCardIcon, 
   BarChart3, 
   UserCircle,
   Hourglass,
@@ -125,6 +126,11 @@ const UserDashboard: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
+      
+      {/* Premium Credit Card Display */}
+      <div className="mb-8">
+        <CreditCard member={member} />
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
