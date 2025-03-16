@@ -1,376 +1,368 @@
 
-import React, { useState, useEffect, useRef } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import GlassMorphismCard from "@/components/shared/GlassMorphismCard";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-  Clock, 
-  UserCheck, 
-  UserX, 
-  Search, 
-  RefreshCw,
-  Users 
-} from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose
+} from "@/components/ui/dialog";
+import { CreditCard, Clock, CheckCircle, UserCheck, ClipboardCheck, XCircle, LogOut } from "lucide-react";
+import { Attendance, Member } from "@/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { attendanceService } from "@/services/attendanceService";
 import { memberService } from "@/services/memberService";
 import { toast } from "sonner";
-import { Attendance, Member } from "@/types";
-
-const RFIDInput = ({ onSubmit }: { onSubmit: (rfidNumber: string) => void }) => {
-  const [rfidNumber, setRfidNumber] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, []);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (rfidNumber.trim()) {
-      onSubmit(rfidNumber);
-      setRfidNumber("");
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSubmit(e);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="relative">
-      <Input
-        ref={inputRef}
-        value={rfidNumber}
-        onChange={(e) => setRfidNumber(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="Scan RFID Card or Enter Manually..."
-        className="bg-black/20 border-white/10 text-white placeholder:text-white/50"
-        autoComplete="off"
-      />
-      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-        <Search className="h-5 w-5 text-white/50" />
-      </div>
-    </form>
-  );
-};
 
 const AdminAttendance = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [selectedMember, setSelectedMember] = useState<string>("");
+  const [rfidInput, setRfidInput] = useState("");
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [showMemberDialog, setShowMemberDialog] = useState(false);
+
+  if (!user) {
+    navigate("/login");
+    return null;
+  }
+
+  const { data: attendanceRecords, isLoading: isLoadingAttendance } = useQuery({
+    queryKey: ['attendance'],
+    queryFn: attendanceService.getAllAttendance,
+  });
 
   const { data: members } = useQuery({
     queryKey: ['members'],
     queryFn: memberService.getAllMembers,
   });
 
-  const { data: attendanceRecords, isLoading: isLoadingAttendance, refetch: refetchAttendance } = useQuery({
-    queryKey: ['attendance'],
-    queryFn: attendanceService.getAllAttendance,
-  });
-
   const checkInMutation = useMutation({
-    mutationFn: attendanceService.checkInMember,
+    mutationFn: (memberId: string) => 
+      attendanceService.checkInMember(memberId, user.id),
     onSuccess: () => {
       toast.success("Member checked in successfully");
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      queryClient.invalidateQueries({ queryKey: ['members'] });
+      setRfidInput("");
+      setShowMemberDialog(false);
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.msg || "Error checking in member");
+    onError: () => {
+      toast.error("Failed to check in member");
     }
   });
 
   const checkOutMutation = useMutation({
-    mutationFn: attendanceService.checkOutMember,
-    onSuccess: (data) => {
-      // Update to access member data correctly
-      toast.success(`Member checked out successfully. ${data?.remainingHours || 0} hours remaining.`);
+    mutationFn: (attendanceId: string) => 
+      attendanceService.checkOutMember(attendanceId, user.id),
+    onSuccess: () => {
+      toast.success("Member checked out successfully");
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      queryClient.invalidateQueries({ queryKey: ['members'] });
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.msg || "Error checking out member");
+    onError: () => {
+      toast.error("Failed to check out member");
     }
   });
 
-  const handleRFIDSubmit = (rfidNumber: string) => {
-    const activeSession = attendanceRecords?.find(
-      record => record.rfidNumber === rfidNumber && !record.checkOutTime
-    );
+  const handleRfidSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rfidInput.trim()) return;
 
-    if (activeSession) {
-      checkOutMutation.mutate(rfidNumber);
-    } else {
-      checkInMutation.mutate(rfidNumber);
-    }
-  };
-
-  const handleManualCheckIn = () => {
-    if (!selectedMember) {
-      toast.error("Please select a member first");
-      return;
-    }
-
-    const member = members?.find(m => m.id === selectedMember);
+    const member = members?.find(m => m.rfidNumber === rfidInput.trim());
+    
     if (member) {
-      checkInMutation.mutate(member.rfidNumber);
-    }
-  };
+      // Check if member is already checked in
+      const activeAttendance = attendanceRecords?.find(
+        record => record.memberId === member.id && record.isActive
+      );
 
-  const handleManualCheckOut = () => {
-    if (!selectedMember) {
-      toast.error("Please select a member first");
-      return;
-    }
-
-    const member = members?.find(m => m.id === selectedMember);
-    if (member) {
-      checkOutMutation.mutate(member.rfidNumber);
-    }
-  };
-
-  if (!user || user.role !== "admin") {
-    navigate("/login");
-    return null;
-  }
-
-  const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-
-  const presentCount = attendanceRecords?.filter(record => !record.checkOutTime).length || 0;
-
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  
-  const totalHoursToday = attendanceRecords
-    ?.filter(record => {
-      const checkInDate = new Date(record.checkInTime);
-      return checkInDate >= startOfDay || !record.checkOutTime;
-    })
-    .reduce((total, record) => {
-      if (record.hoursSpent) {
-        return total + record.hoursSpent;
-      } else if (!record.checkOutTime) {
-        const now = new Date();
-        const checkIn = new Date(record.checkInTime);
-        const hoursSpentSoFar = parseFloat(((now.getTime() - checkIn.getTime()) / (1000 * 60 * 60)).toFixed(2));
-        return total + hoursSpentSoFar;
+      if (activeAttendance) {
+        // Member is already checked in, perform check out
+        checkOutMutation.mutate(activeAttendance.id);
+      } else {
+        // Show confirmation dialog
+        setSelectedMember(member);
+        setShowMemberDialog(true);
       }
-      return total;
-    }, 0) || 0;
+    } else {
+      toast.error("No member found with this RFID");
+    }
+  };
 
-  const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const confirmCheckIn = () => {
+    if (selectedMember) {
+      checkInMutation.mutate(selectedMember.id);
+    }
   };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
-  const lastCheckIn = attendanceRecords?.sort((a, b) => 
-    new Date(b.checkInTime).getTime() - new Date(a.checkInTime).getTime()
-  )[0];
+  const calculateHours = (checkInTime: string, checkOutTime: string | null) => {
+    if (!checkOutTime) return "In progress";
+    
+    const checkIn = new Date(checkInTime).getTime();
+    const checkOut = new Date(checkOutTime).getTime();
+    const diffHours = (checkOut - checkIn) / (1000 * 60 * 60);
+    
+    return diffHours.toFixed(1) + " hrs";
+  };
+
+  // Active attendance records
+  const activeRecords = attendanceRecords?.filter(record => record.isActive) || [];
+  
+  // Recent attendance records (not active, limit to 10)
+  const recentRecords = attendanceRecords
+    ?.filter(record => !record.isActive)
+    .sort((a, b) => new Date(b.checkInTime).getTime() - new Date(a.checkInTime).getTime())
+    .slice(0, 10) || [];
 
   return (
-    <div className="container mx-auto py-4">
+    <div className="container mx-auto py-6 px-4 md:px-0">
       <h1 className="text-3xl font-bold mb-6 text-gradient">Attendance Management</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <GlassMorphismCard className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-white">RFID Check-In/Out</h2>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="text-white/70 border-white/10"
-              onClick={() => refetchAttendance()}
-            >
-              <RefreshCw className="mr-2 h-4 w-4" /> Refresh
-            </Button>
-          </div>
-          
-          <div className="space-y-4">
-            <RFIDInput onSubmit={handleRFIDSubmit} />
-            
-            <div className="p-4 bg-white/5 rounded-lg">
-              <h3 className="text-sm font-medium text-white/80 mb-2">Manual Check-In/Out</h3>
-              <div className="flex flex-col gap-3">
-                <Select onValueChange={setSelectedMember} value={selectedMember}>
-                  <SelectTrigger className="bg-black/20 border-white/10 text-white">
-                    <SelectValue placeholder="Select a member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {members?.map((member: Member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.name} - {member.rfidNumber}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                
-                <div className="flex space-x-2">
-                  <Button 
-                    className="flex-1" 
-                    onClick={handleManualCheckIn}
-                    disabled={!selectedMember}
-                  >
-                    <UserCheck className="mr-2 h-4 w-4" /> Check In
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="flex-1 border-white/10"
-                    onClick={handleManualCheckOut}
-                    disabled={!selectedMember}
-                  >
-                    <UserX className="mr-2 h-4 w-4" /> Check Out
-                  </Button>
-                </div>
-              </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Members Present
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{activeRecords.length}</div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Currently in the daycare
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Today's Visits
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {attendanceRecords?.filter(record => {
+                const today = new Date().toDateString();
+                const recordDate = new Date(record.checkInTime).toDateString();
+                return today === recordDate;
+              }).length || 0}
             </div>
-          </div>
-        </GlassMorphismCard>
-
-        <GlassMorphismCard className="p-6">
-          <h2 className="text-xl font-semibold mb-4 text-white">Current Status</h2>
-          <div className="space-y-4">
-            <div className="px-3 py-2 bg-white/5 rounded-lg mb-4">
-              <p className="text-white/70 text-sm">{today}</p>
-            </div>
-            
-            <div className="flex justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="p-3 bg-blue-500/20 rounded-full">
-                  <Users className="h-6 w-6 text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-white/60 text-sm">Members Present</p>
-                  <p className="text-3xl font-bold text-white">{presentCount}</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-3">
-                <div className="p-3 bg-green-500/20 rounded-full">
-                  <Clock className="h-6 w-6 text-green-400" />
-                </div>
-                <div>
-                  <p className="text-white/60 text-sm">Total Hours Today</p>
-                  <p className="text-3xl font-bold text-white">{totalHoursToday.toFixed(1)}</p>
-                </div>
-              </div>
-            </div>
-            
-            {lastCheckIn && (
-              <div className="bg-white/5 rounded-lg p-3 mt-4">
-                <p className="text-white/80 text-center">
-                  Last Check-in: <span className="font-semibold text-white">{lastCheckIn.memberName}</span> at {formatTime(lastCheckIn.checkInTime)}
-                </p>
-              </div>
-            )}
-          </div>
-        </GlassMorphismCard>
+            <p className="text-xs text-muted-foreground mt-2">
+              Total visits today
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Quick Check-In/Out
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleRfidSubmit} className="flex space-x-2">
+              <Input 
+                placeholder="Scan RFID or enter code" 
+                value={rfidInput}
+                onChange={(e) => setRfidInput(e.target.value)}
+                className="flex-1"
+              />
+              <Button type="submit">Scan</Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
 
-      <GlassMorphismCard className="w-full overflow-hidden">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center">
-            <Clock className="mr-2 h-5 w-5 text-primary" />
-            Attendance Records
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoadingAttendance ? (
-            <div className="p-8 text-center text-white/70">Loading attendance records...</div>
+      <div className="space-y-6">
+        {/* Currently Present */}
+        <div>
+          <h2 className="text-xl font-semibold mb-4">Currently Present</h2>
+          {activeRecords.length === 0 ? (
+            <Card>
+              <CardContent className="py-6">
+                <p className="text-center text-muted-foreground">No members currently checked in</p>
+              </CardContent>
+            </Card>
           ) : (
-            <div className="rounded-md overflow-auto">
+            <div className="rounded-md border overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-white/10">
-                    <TableHead className="text-white/70">Member</TableHead>
-                    <TableHead className="text-white/70">RFID</TableHead>
-                    <TableHead className="text-white/70">Check In</TableHead>
-                    <TableHead className="text-white/70">Check Out</TableHead>
-                    <TableHead className="text-white/70">Hours</TableHead>
-                    <TableHead className="text-white/70">Status</TableHead>
+                  <TableRow>
+                    <TableHead>Member</TableHead>
+                    <TableHead>RFID</TableHead>
+                    <TableHead>Check-In Time</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {attendanceRecords?.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-white/50">
-                        No attendance records found
+                  {activeRecords.map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell>
+                        <div className="font-medium">{record.memberName}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <CreditCard className="h-4 w-4 mr-2 text-primary" />
+                          {record.rfidNumber}
+                        </div>
+                      </TableCell>
+                      <TableCell>{formatDate(record.checkInTime)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center text-yellow-500">
+                          <Clock className="h-4 w-4 mr-1" />
+                          {calculateHours(record.checkInTime, record.checkOutTime)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center"
+                          onClick={() => checkOutMutation.mutate(record.id)}
+                        >
+                          <LogOut className="h-4 w-4 mr-1" />
+                          Check Out
+                        </Button>
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    attendanceRecords?.map((record: Attendance) => (
-                      <TableRow key={record.id} className="border-white/10">
-                        <TableCell className="font-medium text-white">
-                          {record.memberName}
-                        </TableCell>
-                        <TableCell className="font-mono text-white/80">{record.rfidNumber}</TableCell>
-                        <TableCell className="text-white/80">
-                          <div>
-                            {formatTime(record.checkInTime)}
-                            <div className="text-xs text-white/60">{formatDate(record.checkInTime)}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-white/80">
-                          {record.checkOutTime ? (
-                            <div>
-                              {formatTime(record.checkOutTime)}
-                              <div className="text-xs text-white/60">{formatDate(record.checkOutTime)}</div>
-                            </div>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell className="text-white/80">
-                          {record.hoursSpent ? `${record.hoursSpent} hrs` : "—"}
-                        </TableCell>
-                        <TableCell>
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            record.checkOutTime 
-                              ? 'bg-green-500/20 text-green-400' 
-                              : 'bg-blue-500/20 text-blue-400'
-                          }`}>
-                            {record.checkOutTime ? 'Completed' : 'Active'}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
+                  ))}
                 </TableBody>
               </Table>
             </div>
           )}
-        </CardContent>
-      </GlassMorphismCard>
+        </div>
+        
+        {/* Recent Check-Ins */}
+        <div>
+          <h2 className="text-xl font-semibold mb-4">Recent Attendance</h2>
+          {recentRecords.length === 0 ? (
+            <Card>
+              <CardContent className="py-6">
+                <p className="text-center text-muted-foreground">No recent attendance records</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Member</TableHead>
+                    <TableHead>RFID</TableHead>
+                    <TableHead>Check-In</TableHead>
+                    <TableHead>Check-Out</TableHead>
+                    <TableHead>Hours Spent</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentRecords.map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell>
+                        <div className="font-medium">{record.memberName}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <CreditCard className="h-4 w-4 mr-2 text-primary" />
+                          {record.rfidNumber}
+                        </div>
+                      </TableCell>
+                      <TableCell>{formatDate(record.checkInTime)}</TableCell>
+                      <TableCell>
+                        {record.checkOutTime ? formatDate(record.checkOutTime) : "-"}
+                      </TableCell>
+                      <TableCell>
+                        {record.hoursSpent !== null ? (
+                          <span className="flex items-center text-green-500">
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            {record.hoursSpent.toFixed(1)} hrs
+                          </span>
+                        ) : (
+                          <span className="flex items-center text-yellow-500">
+                            <Clock className="h-4 w-4 mr-1" />
+                            In progress
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={showMemberDialog} onOpenChange={setShowMemberDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Check-In Member</DialogTitle>
+            <DialogDescription>
+              Confirm you want to check in this member
+            </DialogDescription>
+          </DialogHeader>
+          {selectedMember && (
+            <div className="py-4">
+              <div className="flex items-center space-x-4 mb-4">
+                <div className="rounded-full bg-primary/10 p-3">
+                  <UserCheck className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-lg">{selectedMember.name}</h3>
+                  <p className="text-sm text-muted-foreground">{selectedMember.email}</p>
+                </div>
+              </div>
+              <div className="bg-muted p-3 rounded-md">
+                <div className="flex justify-between mb-2">
+                  <span className="text-muted-foreground">RFID Number:</span>
+                  <span className="font-medium">{selectedMember.rfidNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Hours Available:</span>
+                  <span className="font-medium">
+                    {selectedMember.remainingHours} hrs
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={confirmCheckIn}>
+              <ClipboardCheck className="h-4 w-4 mr-2" />
+              Check In
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

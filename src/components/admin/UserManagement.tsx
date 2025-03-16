@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { 
   Table, 
@@ -8,442 +7,384 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { 
+import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
-  DialogClose
+  DialogClose,
 } from "@/components/ui/dialog";
-import { 
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Member } from "@/types";
-import { 
-  Edit, 
-  Plus, 
-  AlertTriangle, 
-  UserPlus, 
-  Search,
-  Check,
-  X
-} from "lucide-react";
+import { CreditCard, Edit, Trash, UserPlus, CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { memberService } from "@/services/memberService";
 
-const formSchema = z.object({
-  name: z.string().min(2, {
-    message: "Name must be at least 2 characters.",
-  }),
-  email: z.string().email({
-    message: "Please enter a valid email.",
-  }),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  rfidNumber: z.string().regex(/^RF\d{6}$/, {
-    message: "RFID Number must follow format RF followed by 6 digits",
-  }),
-  membershipHours: z.number().min(0),
-  isActive: z.boolean().default(true),
-});
+const UserManagement: React.FC = () => {
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<Member | null>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    rfidNumber: "",
+    membershipHours: 0,
+    isActive: true
+  });
 
-interface UserManagementProps {
-  members: Member[];
-}
+  const queryClient = useQueryClient();
 
-const UserManagement: React.FC<UserManagementProps> = ({ members }) => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [editMode, setEditMode] = useState(false);
-  const [showAddHoursDialog, setShowAddHoursDialog] = useState(false);
-  const [hoursToAdd, setHoursToAdd] = useState(0);
+  const { data: members, isLoading } = useQuery({
+    queryKey: ['members'],
+    queryFn: memberService.getAllMembers,
+  });
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
+  const addMemberMutation = useMutation({
+    mutationFn: (newMember: Omit<Member, 'id' | 'role' | 'totalHoursUsed' | 'remainingHours'>) => 
+      memberService.addMember(newMember),
+    onSuccess: () => {
+      toast.success("Member added successfully");
+      queryClient.invalidateQueries({ queryKey: ['members'] });
+      setIsAddUserOpen(false);
+      resetForm();
+    },
+    onError: () => {
+      toast.error("Failed to add member");
+    }
+  });
+
+  const updateMemberMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string, data: Partial<Member> }) => 
+      memberService.updateMember(id, data),
+    onSuccess: () => {
+      toast.success("Member updated successfully");
+      queryClient.invalidateQueries({ queryKey: ['members'] });
+      setIsEditUserOpen(false);
+    },
+    onError: () => {
+      toast.error("Failed to update member");
+    }
+  });
+
+  const deleteMemberMutation = useMutation({
+    mutationFn: (id: string) => 
+      memberService.deleteMember(id),
+    onSuccess: () => {
+      toast.success("Member deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ['members'] });
+    },
+    onError: () => {
+      toast.error("Failed to delete member");
+    }
+  });
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type } = e.target;
+    
+    if (type === 'number') {
+      setFormData({
+        ...formData,
+        [name]: parseFloat(value) || 0
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      });
+    }
+  };
+
+  const handleSwitchChange = (checked: boolean) => {
+    setFormData({
+      ...formData,
+      isActive: checked
+    });
+  };
+
+  const resetForm = () => {
+    setFormData({
       name: "",
       email: "",
       phone: "",
-      address: "",
-      rfidNumber: "RF",
+      rfidNumber: "",
       membershipHours: 0,
-      isActive: true,
-    },
-  });
-
-  const filteredMembers = members.filter(member => 
-    member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.rfidNumber.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
+      isActive: true
+    });
   };
 
-  const handleEdit = (member: Member) => {
-    setSelectedMember(member);
-    form.reset({
+  const openEditDialog = (member: Member) => {
+    setSelectedUser(member);
+    setFormData({
       name: member.name,
       email: member.email,
       phone: member.phone || "",
-      address: member.address || "",
       rfidNumber: member.rfidNumber,
       membershipHours: member.membershipHours,
       isActive: member.isActive
     });
-    setEditMode(true);
+    setIsEditUserOpen(true);
   };
 
-  const handleAddHours = (member: Member) => {
-    setSelectedMember(member);
-    setHoursToAdd(0);
-    setShowAddHoursDialog(true);
-  };
-
-  const submitAddHours = async () => {
-    if (!selectedMember) return;
+  const handleAddMember = () => {
+    const newMember = {
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      rfidNumber: formData.rfidNumber,
+      membershipHours: formData.membershipHours,
+      isActive: formData.isActive,
+      role: "member" as const
+    };
     
-    try {
-      await memberService.addHours(selectedMember.id, hoursToAdd);
-      toast.success(`Added ${hoursToAdd} hours to ${selectedMember.name}`);
-      setShowAddHoursDialog(false);
-    } catch (error) {
-      toast.error("Failed to add hours");
+    addMemberMutation.mutate(newMember);
+  };
+
+  const handleUpdateMember = () => {
+    if (!selectedUser) return;
+    
+    const updatedData: Partial<Member> = {
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      rfidNumber: formData.rfidNumber,
+      membershipHours: formData.membershipHours,
+      isActive: formData.isActive
+    };
+    
+    updateMemberMutation.mutate({ id: selectedUser.id, data: updatedData });
+  };
+
+  const handleDeleteMember = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this member?")) {
+      deleteMemberMutation.mutate(id);
     }
   };
 
-  const handleDeactivate = (member: Member) => {
-    // Toggle activation status
-    memberService.updateMember(member.id, { isActive: !member.isActive })
-      .then(() => {
-        toast.success(`${member.name} has been ${member.isActive ? 'deactivated' : 'activated'}`);
-      })
-      .catch(error => {
-        toast.error("Failed to update member status");
-      });
-  };
-
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    try {
-      if (editMode && selectedMember) {
-        // Update existing member
-        await memberService.updateMember(selectedMember.id, values);
-        toast.success("Member updated successfully");
-      } else {
-        // Create new member
-        await memberService.addMember({
-          ...values,
-          role: "member",
-          password: "password123", // Default password for testing
-          totalHoursUsed: 0
-        });
-        toast.success("Member added successfully");
-      }
-      form.reset();
-      setEditMode(false);
-      setSelectedMember(null);
-    } catch (error) {
-      toast.error("Failed to save member");
-    }
-  };
-
-  const openAddMemberDialog = () => {
-    setEditMode(false);
-    setSelectedMember(null);
-    form.reset({
-      name: "",
-      email: "",
-      phone: "",
-      address: "",
-      rfidNumber: "RF",
-      membershipHours: 0,
-      isActive: true,
-    });
-  };
-
+  
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search members..."
-            value={searchTerm}
-            onChange={handleSearch}
-            className="pl-9"
-          />
-        </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button onClick={openAddMemberDialog}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add Member
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>{editMode ? "Edit Member" : "Add New Member"}</DialogTitle>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Name</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="rfidNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>RFID Number</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <FormField
-                  control={form.control}
-                  name="address"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Address</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="membershipHours"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Membership Hours</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          {...field} 
-                          onChange={e => field.onChange(parseInt(e.target.value))}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="isActive"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                      <div className="space-y-0.5">
-                        <FormLabel>Active Status</FormLabel>
-                        <FormDescription>
-                          Member can check in/out when active
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="outline">Cancel</Button>
-                  </DialogClose>
-                  <Button type="submit">{editMode ? "Update" : "Add"} Member</Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-semibold">Members Management</h2>
+        <Button onClick={() => setIsAddUserOpen(true)}>
+          <UserPlus className="h-4 w-4 mr-2" />
+          Add Member
+        </Button>
       </div>
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Member</TableHead>
-              <TableHead>RFID</TableHead>
-              <TableHead>Hours</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredMembers.length === 0 ? (
+      {isLoading ? (
+        <div>Loading members...</div>
+      ) : (
+        <div className="border rounded-md overflow-hidden">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
-                  No members found
-                </TableCell>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>RFID</TableHead>
+                <TableHead>Hours</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
-            ) : (
-              filteredMembers.map((member) => (
+            </TableHeader>
+            <TableBody>
+              {members?.map((member) => (
                 <TableRow key={member.id}>
+                  <TableCell className="font-medium">{member.name}</TableCell>
+                  <TableCell>{member.email}</TableCell>
                   <TableCell>
-                    <div>
-                      <div className="font-medium">{member.name}</div>
-                      <div className="text-sm text-muted-foreground">{member.email}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono">{member.rfidNumber}</TableCell>
-                  <TableCell>
-                    <div>
-                      {member.remainingHours} / {member.membershipHours}
-                      <div className="w-24 h-1.5 bg-secondary rounded-full mt-1">
-                        <div 
-                          className={`h-full rounded-full ${
-                            member.remainingHours / member.membershipHours < 0.2 
-                              ? 'bg-destructive' 
-                              : 'bg-primary'
-                          }`} 
-                          style={{ width: `${(member.remainingHours / member.membershipHours) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs ${
-                      member.isActive 
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
-                        : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                    }`}>
-                      {member.isActive ? (
-                        <><Check className="mr-1 h-3 w-3" /> Active</>
-                      ) : (
-                        <><X className="mr-1 h-3 w-3" /> Inactive</>
-                      )}
+                    <span className="flex items-center">
+                      <CreditCard className="h-4 w-4 mr-2 text-primary" />
+                      {member.rfidNumber}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end space-x-2">
+                  <TableCell>
+                    {member.remainingHours} / {member.membershipHours}
+                  </TableCell>
+                  <TableCell>
+                    {member.isActive ? (
+                      <span className="flex items-center text-green-500">
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Active
+                      </span>
+                    ) : (
+                      <span className="flex items-center text-red-500">
+                        <XCircle className="h-4 w-4 mr-1" />
+                        Inactive
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex space-x-2">
                       <Button 
                         variant="outline" 
-                        size="icon" 
-                        onClick={() => handleEdit(member)}
+                        size="sm"
+                        onClick={() => openEditDialog(member)}
                       >
                         <Edit className="h-4 w-4" />
-                        <span className="sr-only">Edit</span>
                       </Button>
                       <Button 
                         variant="outline" 
-                        size="icon" 
-                        onClick={() => handleAddHours(member)}
+                        size="sm"
+                        className="text-red-500 hover:bg-red-50"
+                        onClick={() => handleDeleteMember(member.id)}
                       >
-                        <Plus className="h-4 w-4" />
-                        <span className="sr-only">Add Hours</span>
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="icon" 
-                        onClick={() => handleDeactivate(member)}
-                        className={member.isActive ? "text-red-500" : "text-green-500"}
-                      >
-                        <AlertTriangle className="h-4 w-4" />
-                        <span className="sr-only">
-                          {member.isActive ? "Deactivate" : "Activate"}
-                        </span>
+                        <Trash className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
-      {/* Add Hours Dialog */}
-      <Dialog open={showAddHoursDialog} onOpenChange={setShowAddHoursDialog}>
-        <DialogContent className="sm:max-w-[425px]">
+      {/* Add Member Dialog */}
+      <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Hours</DialogTitle>
+            <DialogTitle>Add New Member</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <FormItem>
-              <FormLabel>Hours to Add</FormLabel>
-              <FormControl>
-                <Input 
-                  type="number" 
-                  value={hoursToAdd}
-                  onChange={(e) => setHoursToAdd(Number(e.target.value))}
-                />
-              </FormControl>
-              <FormDescription>
-                Adding hours to {selectedMember?.name}'s account
-              </FormDescription>
-            </FormItem>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="phone">Phone (optional)</Label>
+              <Input
+                id="phone"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="rfidNumber">RFID Number</Label>
+              <Input
+                id="rfidNumber"
+                name="rfidNumber"
+                value={formData.rfidNumber}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="membershipHours">Membership Hours</Label>
+              <Input
+                id="membershipHours"
+                name="membershipHours"
+                type="number"
+                value={formData.membershipHours}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="isActive"
+                checked={formData.isActive}
+                onCheckedChange={handleSwitchChange}
+              />
+              <Label htmlFor="isActive">Active</Label>
+            </div>
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline">Cancel</Button>
+              <Button variant="outline">Cancel</Button>
             </DialogClose>
-            <Button onClick={submitAddHours}>Add Hours</Button>
+            <Button onClick={handleAddMember}>Add Member</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Member</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-name">Name</Label>
+              <Input
+                id="edit-name"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-phone">Phone (optional)</Label>
+              <Input
+                id="edit-phone"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-rfidNumber">RFID Number</Label>
+              <Input
+                id="edit-rfidNumber"
+                name="rfidNumber"
+                value={formData.rfidNumber}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-membershipHours">Membership Hours</Label>
+              <Input
+                id="edit-membershipHours"
+                name="membershipHours"
+                type="number"
+                value={formData.membershipHours}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="edit-isActive"
+                checked={formData.isActive}
+                onCheckedChange={handleSwitchChange}
+              />
+              <Label htmlFor="edit-isActive">Active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={handleUpdateMember}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
