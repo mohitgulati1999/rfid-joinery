@@ -1,274 +1,226 @@
 
 import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CreditCard, Check, X, Eye } from "lucide-react";
-import { toast } from "sonner";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
+  DialogDescription,
+  DialogClose,
 } from "@/components/ui/dialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { PaymentRequest } from "@/types";
+import { CheckCircle2, XCircle, CreditCard, ImageIcon, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { paymentService } from "@/services/paymentService";
 
-interface Payment {
-  id: string;
-  memberName: string;
-  amount: number;
-  hoursRequested: number;
-  date: Date | string;
-  status: "pending" | "approved" | "rejected";
-  proofUrl: string;
-}
+const PaymentApprovals: React.FC = () => {
+  const [selectedPayment, setSelectedPayment] = useState<PaymentRequest | null>(null);
+  const [showImageDialog, setShowImageDialog] = useState(false);
+  const queryClient = useQueryClient();
 
-const PaymentApprovals = () => {
-  const [payments, setPayments] = useState<Payment[]>([
-    {
-      id: "1",
-      memberName: "John Doe",
-      amount: 50,
-      hoursRequested: 10,
-      date: new Date("2023-05-10"),
-      status: "pending",
-      proofUrl: "https://via.placeholder.com/300"
+  const { data: payments, isLoading } = useQuery({
+    queryKey: ['payments'],
+    queryFn: paymentService.getAllPaymentRequests,
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (paymentId: string) => 
+      paymentService.approvePaymentRequest(paymentId, "admin1"),
+    onSuccess: () => {
+      toast.success("Payment approved successfully");
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
     },
-    {
-      id: "2",
-      memberName: "Jane Smith",
-      amount: 75,
-      hoursRequested: 15,
-      date: new Date("2023-05-09"),
-      status: "approved",
-      proofUrl: "https://via.placeholder.com/300"
-    },
-    {
-      id: "3",
-      memberName: "Bob Johnson",
-      amount: 25,
-      hoursRequested: 5,
-      date: new Date("2023-05-08"),
-      status: "rejected",
-      proofUrl: "https://via.placeholder.com/300"
-    },
-    {
-      id: "4",
-      memberName: "Alice Williams",
-      amount: 100,
-      hoursRequested: 20,
-      date: new Date("2023-05-07"),
-      status: "pending",
-      proofUrl: "https://via.placeholder.com/300"
+    onError: () => {
+      toast.error("Failed to approve payment");
     }
-  ]);
-  
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  
-  const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString('en-US', {
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (paymentId: string) => 
+      paymentService.rejectPaymentRequest(paymentId, "admin1"),
+    onSuccess: () => {
+      toast.error("Payment rejected");
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+    },
+    onError: () => {
+      toast.error("Failed to reject payment");
+    }
+  });
+
+  const viewPaymentProof = (payment: PaymentRequest) => {
+    setSelectedPayment(payment);
+    setShowImageDialog(true);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
-  
+
   const handleApprove = (paymentId: string) => {
-    setPayments(payments.map(payment => 
-      payment.id === paymentId 
-        ? { ...payment, status: "approved" } 
-        : payment
-    ));
-    toast.success("Payment approved successfully");
+    approveMutation.mutate(paymentId);
   };
-  
+
   const handleReject = (paymentId: string) => {
-    setPayments(payments.map(payment => 
-      payment.id === paymentId 
-        ? { ...payment, status: "rejected" } 
-        : payment
-    ));
-    toast.error("Payment rejected");
+    rejectMutation.mutate(paymentId);
   };
-  
-  const handleView = (payment: Payment) => {
-    setSelectedPayment(payment);
-    setViewDialogOpen(true);
-  };
+
+  const pendingPayments = payments?.filter(payment => payment.status === "pending") || [];
 
   return (
     <>
-      <Card className="w-full overflow-hidden">
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <CreditCard className="mr-2 h-5 w-5 text-primary" />
-            Payment Requests
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md overflow-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Member</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Hours</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+      {isLoading ? (
+        <div className="text-center p-4">Loading payment requests...</div>
+      ) : pendingPayments.length === 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-center text-muted-foreground text-lg">No pending payments</CardTitle>
+            <CardDescription className="text-center">
+              All payment requests have been processed
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : (
+        <div className="rounded-md border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Member</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Hours</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Proof</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pendingPayments.map((payment) => (
+                <TableRow key={payment.id}>
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">{payment.memberName}</div>
+                      <div className="text-sm text-muted-foreground">{payment.memberId}</div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-medium">${payment.amount}</TableCell>
+                  <TableCell>{payment.hoursRequested} hrs</TableCell>
+                  <TableCell>{formatDate(payment.requestDate)}</TableCell>
+                  <TableCell>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => viewPaymentProof(payment)}
+                    >
+                      <ImageIcon className="h-4 w-4 mr-2" />
+                      View
+                    </Button>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex space-x-2">
+                      <Button 
+                        size="sm" 
+                        className="bg-green-500 hover:bg-green-600"
+                        onClick={() => handleApprove(payment.id)}
+                      >
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Approve
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="text-red-500 hover:bg-red-50"
+                        onClick={() => handleReject(payment.id)}
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Reject
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {payments.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell className="font-medium">
-                      {payment.memberName}
-                    </TableCell>
-                    <TableCell>${payment.amount.toFixed(2)}</TableCell>
-                    <TableCell>{payment.hoursRequested} hrs</TableCell>
-                    <TableCell>{formatDate(payment.date)}</TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        payment.status === 'approved' 
-                          ? 'bg-green-500/20 text-green-500' 
-                          : payment.status === 'rejected'
-                            ? 'bg-red-500/20 text-red-500'
-                            : 'bg-yellow-500/20 text-yellow-500'
-                      }`}>
-                        {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end space-x-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-8 w-8 p-0"
-                          onClick={() => handleView(payment)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {payment.status === 'pending' && (
-                          <>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-8 w-8 p-0 text-green-500"
-                              onClick={() => handleApprove(payment.id)}
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-8 w-8 p-0 text-destructive"
-                              onClick={() => handleReject(payment.id)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-      
-      {/* Payment proof dialog */}
-      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {/* Payment Proof Image Dialog */}
+      <Dialog open={showImageDialog} onOpenChange={setShowImageDialog}>
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Payment Proof</DialogTitle>
             <DialogDescription>
-              {selectedPayment && (
-                <div className="flex items-center space-x-2 mt-2">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback>{selectedPayment.memberName.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-medium">{selectedPayment.memberName}</p>
-                    <p className="text-xs text-muted-foreground">${selectedPayment.amount} for {selectedPayment.hoursRequested} hours</p>
-                  </div>
-                </div>
-              )}
+              {selectedPayment && `Submitted by ${selectedPayment.memberName} on ${formatDate(selectedPayment.requestDate)}`}
             </DialogDescription>
           </DialogHeader>
-          
-          {selectedPayment && (
-            <div className="flex flex-col gap-4">
-              <div className="overflow-hidden rounded-md">
-                <img 
-                  src={selectedPayment.proofUrl} 
-                  alt="Payment proof" 
-                  className="w-full object-cover"
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium">Amount</p>
-                  <p className="text-xl font-bold">${selectedPayment.amount.toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Date</p>
-                  <p className="text-sm">{formatDate(selectedPayment.date)}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Hours</p>
-                  <p className="text-sm">{selectedPayment.hoursRequested} hours</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Status</p>
-                  <span className={`px-2 py-1 rounded-full text-xs ${
-                    selectedPayment.status === 'approved' 
-                      ? 'bg-green-500/20 text-green-500' 
-                      : selectedPayment.status === 'rejected'
-                        ? 'bg-red-500/20 text-red-500'
-                        : 'bg-yellow-500/20 text-yellow-500'
-                  }`}>
-                    {selectedPayment.status.charAt(0).toUpperCase() + selectedPayment.status.slice(1)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <DialogFooter className="gap-2 sm:gap-0">
-            {selectedPayment && selectedPayment.status === 'pending' && (
+          <div className="flex flex-col items-center space-y-4">
+            {selectedPayment ? (
               <>
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    if (selectedPayment) {
-                      handleReject(selectedPayment.id);
-                      setViewDialogOpen(false);
-                    }
-                  }}
-                >
-                  <X className="mr-2 h-4 w-4" />
-                  Reject
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (selectedPayment) {
-                      handleApprove(selectedPayment.id);
-                      setViewDialogOpen(false);
-                    }
-                  }}
-                >
-                  <Check className="mr-2 h-4 w-4" />
-                  Approve
-                </Button>
+                <div className="border rounded-lg overflow-hidden max-h-80">
+                  <img 
+                    src={selectedPayment.paymentProofImage} 
+                    alt="Payment proof" 
+                    className="object-contain max-h-80"
+                  />
+                </div>
+                <div className="w-full flex justify-between items-center">
+                  <div>
+                    <p className="font-medium">${selectedPayment.amount}</p>
+                    <p className="text-sm text-muted-foreground">for {selectedPayment.hoursRequested} hours</p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button 
+                      size="sm" 
+                      className="bg-green-500 hover:bg-green-600"
+                      onClick={() => {
+                        handleApprove(selectedPayment.id);
+                        setShowImageDialog(false);
+                      }}
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Approve
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="text-red-500 hover:bg-red-50"
+                      onClick={() => {
+                        handleReject(selectedPayment.id);
+                        setShowImageDialog(false);
+                      }}
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Reject
+                    </Button>
+                  </div>
+                </div>
               </>
+            ) : (
+              <p>No image available</p>
             )}
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </>

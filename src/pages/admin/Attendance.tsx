@@ -100,7 +100,8 @@ const AdminAttendance = () => {
   const checkOutMutation = useMutation({
     mutationFn: attendanceService.checkOutMember,
     onSuccess: (data) => {
-      toast.success(`Member checked out. ${data.member.remainingHours} hours remaining.`);
+      // Update to access member data correctly
+      toast.success(`Member checked out successfully. ${data?.remainingHours || 0} hours remaining.`);
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
     },
     onError: (error: any) => {

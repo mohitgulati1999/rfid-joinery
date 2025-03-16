@@ -14,7 +14,7 @@ export const mockMembers: Member[] = [
     membershipHours: 50,
     totalHoursUsed: 12,
     isActive: true,
-    createdAt: new Date("2023-01-15"),
+    remainingHours: 38
   },
   {
     id: "mem2",
@@ -26,7 +26,7 @@ export const mockMembers: Member[] = [
     membershipHours: 30,
     totalHoursUsed: 25,
     isActive: true,
-    createdAt: new Date("2023-02-20"),
+    remainingHours: 5
   },
   {
     id: "mem3",
@@ -37,7 +37,7 @@ export const mockMembers: Member[] = [
     membershipHours: 20,
     totalHoursUsed: 20,
     isActive: false,
-    createdAt: new Date("2023-03-10"),
+    remainingHours: 0
   },
   {
     id: "mem4",
@@ -49,7 +49,7 @@ export const mockMembers: Member[] = [
     membershipHours: 40,
     totalHoursUsed: 10,
     isActive: true,
-    createdAt: new Date("2023-04-05"),
+    remainingHours: 30
   }
 ];
 
@@ -114,7 +114,8 @@ export const mockAttendance: Attendance[] = [
     checkOutTime: "2023-06-01T11:30:00",
     hoursSpent: 2.5,
     checkInBy: "admin1",
-    checkOutBy: "admin1"
+    checkOutBy: "admin1",
+    isActive: false
   },
   {
     id: "att2",
@@ -125,7 +126,8 @@ export const mockAttendance: Attendance[] = [
     checkOutTime: "2023-06-01T14:00:00",
     hoursSpent: 4,
     checkInBy: "admin1",
-    checkOutBy: "admin1"
+    checkOutBy: "admin1",
+    isActive: false
   },
   {
     id: "att3",
@@ -136,7 +138,8 @@ export const mockAttendance: Attendance[] = [
     checkOutTime: "2023-06-02T12:30:00",
     hoursSpent: 3,
     checkInBy: "admin1",
-    checkOutBy: "admin1"
+    checkOutBy: "admin1",
+    isActive: false
   },
   {
     id: "att4",
@@ -144,8 +147,10 @@ export const mockAttendance: Attendance[] = [
     memberName: "Sarah Williams",
     rfidNumber: "RF456789",
     checkInTime: "2023-06-02T13:00:00",
-    checkOutTime: undefined,
-    checkInBy: "admin1"
+    checkOutTime: null,
+    hoursSpent: null,
+    checkInBy: "admin1",
+    isActive: true
   }
 ];
 
@@ -157,10 +162,11 @@ export const mockPaymentRequests: PaymentRequest[] = [
     memberName: "John Doe",
     amount: 50,
     hoursRequested: 10,
-    requestDate: new Date("2023-05-28"),
+    requestDate: "2023-05-28T15:30:00",
+    paymentProofImage: "https://via.placeholder.com/300",
     status: "approved",
     approvedBy: "admin1",
-    approvalDate: new Date("2023-05-29")
+    approvalDate: "2023-05-29T10:15:00"
   },
   {
     id: "pay2",
@@ -168,7 +174,8 @@ export const mockPaymentRequests: PaymentRequest[] = [
     memberName: "Jane Smith",
     amount: 75,
     hoursRequested: 15,
-    requestDate: new Date("2023-05-30"),
+    requestDate: "2023-05-30T09:45:00",
+    paymentProofImage: "https://via.placeholder.com/300",
     status: "pending"
   },
   {
@@ -177,9 +184,10 @@ export const mockPaymentRequests: PaymentRequest[] = [
     memberName: "Sarah Williams",
     amount: 25,
     hoursRequested: 5,
-    requestDate: new Date("2023-06-01"),
+    requestDate: "2023-06-01T14:20:00",
+    paymentProofImage: "https://via.placeholder.com/300",
     status: "rejected",
     approvedBy: "admin1",
-    approvalDate: new Date("2023-06-01")
+    approvalDate: "2023-06-01T17:30:00"
   }
 ];

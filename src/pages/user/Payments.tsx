@@ -1,165 +1,165 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Member, PaymentRequest } from "@/types";
-import { CreditCard, CheckCircle2 } from "lucide-react";
+import { CreditCard, CheckCircle2, Clock, XCircle } from "lucide-react";
 import GlassMorphismCard from "@/components/shared/GlassMorphismCard";
 import PaymentRequestComponent from "@/components/user/PaymentRequest";
 import { paymentService } from "@/services/paymentService";
+import { useQuery } from "@tanstack/react-query";
 
 const UserPayments = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [paymentHistory, setPaymentHistory] = useState<PaymentRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
   if (!user) {
+    navigate("/login");
     return null;
   }
 
   const member = user as Member;
   
-  useEffect(() => {
-    const fetchPaymentHistory = async () => {
-      try {
-        const history = await paymentService.getMemberPaymentHistory(user.id);
-        setPaymentHistory(history);
-      } catch (error) {
-        console.error("Error fetching payment history:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchPaymentHistory();
-  }, [user.id]);
+  const { data: paymentHistory, isLoading, refetch } = useQuery({
+    queryKey: ['paymentHistory', member.id],
+    queryFn: () => paymentService.getMemberPaymentHistory(member.id),
+  });
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+      month: 'short',
+      day: 'numeric',
     });
   };
 
+  const getStatusBadge = (status: string) => {
+    switch(status) {
+      case 'approved':
+        return (
+          <span className="flex items-center text-green-500">
+            <CheckCircle2 className="h-4 w-4 mr-1" />
+            Approved
+          </span>
+        );
+      case 'rejected':
+        return (
+          <span className="flex items-center text-red-500">
+            <XCircle className="h-4 w-4 mr-1" />
+            Rejected
+          </span>
+        );
+      default:
+        return (
+          <span className="flex items-center text-yellow-500">
+            <Clock className="h-4 w-4 mr-1" />
+            Pending
+          </span>
+        );
+    }
+  };
+
   return (
-    <div className="container mx-auto py-8 px-4 md:px-0">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Payments</h1>
-          <p className="text-muted-foreground">Add hours to your membership</p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => navigate('/user/dashboard')}
-          className="mt-4 md:mt-0"
-        >
-          Back to Dashboard
-        </Button>
+    <div className="container mx-auto py-6 px-4 md:px-0">
+      <h1 className="text-3xl font-bold mb-6 text-gradient">Hours & Payments</h1>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Hours Balance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{member.remainingHours} hrs</div>
+            <p className="text-xs text-muted-foreground mt-2">
+              {member.totalHoursUsed} hours used of {member.membershipHours} total
+            </p>
+            <div className="w-full h-2 bg-secondary rounded-full mt-3">
+              <div 
+                className="h-full rounded-full bg-primary" 
+                style={{ width: `${(member.remainingHours / member.membershipHours) * 100}%` }}
+              ></div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Pending Requests
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {paymentHistory?.filter(p => p.status === 'pending').length || 0}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Awaiting approval from admin
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Account Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-500">Active</div>
+            <p className="text-xs text-muted-foreground mt-2">
+              {member.isActive ? 'Your account is in good standing' : 'Your account is inactive'}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <PaymentRequestComponent />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <PaymentRequestComponent 
+            member={member}
+            onRequestSubmit={() => refetch()}
+          />
         </div>
-
-        <div className="space-y-6">
-          <GlassMorphismCard className="p-6">
-            <CardTitle className="mb-4 flex items-center">
-              <CreditCard className="mr-2 h-5 w-5" />
-              Payment Information
+        
+        <GlassMorphismCard>
+          <CardHeader>
+            <CardTitle className="text-white flex items-center">
+              <CreditCard className="mr-2 h-5 w-5 text-primary" />
+              Payment History
             </CardTitle>
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-1">Bank Transfer</h3>
-                <p className="font-mono text-sm bg-muted p-2 rounded">
-                  RFID Daycare Inc.<br />
-                  ACC: 1234567890<br />
-                  IFSC: ABCD0123456
-                </p>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-1">UPI ID</h3>
-                <p className="font-mono text-sm bg-muted p-2 rounded">
-                  rfiddaycare@upi
-                </p>
-              </div>
-              
-              <div className="pt-4 border-t">
-                <div className="bg-muted/50 p-3 rounded-lg">
-                  <h3 className="font-medium mb-1 flex items-center">
-                    <CheckCircle2 className="h-4 w-4 mr-1 text-green-600" />
-                    Current Price
-                  </h3>
-                  <p className="text-2xl font-bold">$5.00 <span className="text-sm font-normal text-muted-foreground">per hour</span></p>
-                </div>
-              </div>
-            </div>
-          </GlassMorphismCard>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Payments</CardTitle>
-              <CardDescription>Your payment history</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isLoading ? (
-                <div className="text-center py-4">Loading payment history...</div>
-              ) : paymentHistory.length > 0 ? (
-                paymentHistory.map((payment) => (
-                  <div key={payment.id} className="flex items-center justify-between border-b last:border-0 pb-3 last:pb-0">
-                    <div>
-                      <p className="font-medium">Payment #{payment.id}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Added {payment.hoursRequested} hours
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(payment.requestDate)}
-                      </p>
+            <CardDescription className="text-white/60">
+              Your recent payment requests and their status
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="text-center py-6 text-white/60">Loading payment history...</div>
+            ) : paymentHistory?.length === 0 ? (
+              <div className="text-center py-6 text-white/60">No payment history found</div>
+            ) : (
+              <div className="space-y-4">
+                {paymentHistory?.map((payment) => (
+                  <div key={payment.id} className="flex items-center justify-between p-4 border border-white/10 rounded-lg bg-white/5">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-2 rounded-full bg-white/10">
+                        <CreditCard className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <div className="font-medium text-white">${payment.amount} for {payment.hoursRequested} hours</div>
+                        <div className="text-sm text-white/60">{formatDate(payment.requestDate)}</div>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium">${payment.amount.toFixed(2)}</p>
-                      <p className={`text-xs ${
-                        payment.status === 'approved' 
-                          ? 'text-green-600' 
-                          : payment.status === 'rejected'
-                            ? 'text-red-600'
-                            : 'text-yellow-600'
-                      }`}>
-                        {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
-                      </p>
-                    </div>
+                    <div>{getStatusBadge(payment.status)}</div>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-4 text-muted-foreground">
-                  No payment history yet
-                </div>
-              )}
-              
-              {!isLoading && paymentHistory.length === 0 && (
-                [...Array(3)].map((_, i) => (
-                  <div key={i} className="flex items-center justify-between border-b last:border-0 pb-3 last:pb-0">
-                    <div>
-                      <p className="font-medium">Payment #{1000 + i}</p>
-                      <p className="text-sm text-muted-foreground">Added 10 hours</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(new Date(Date.now() - i * 86400000 * 5).toISOString())}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">$50.00</p>
-                      <p className="text-xs text-green-600">Approved</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </GlassMorphismCard>
       </div>
     </div>
   );

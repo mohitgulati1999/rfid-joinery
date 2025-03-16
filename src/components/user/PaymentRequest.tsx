@@ -1,174 +1,256 @@
 
 import React, { useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, Loader2 } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Member } from "@/types";
+import { CreditCard, Upload, Calculator } from "lucide-react";
 import { toast } from "sonner";
 import { paymentService } from "@/services/paymentService";
 
-const pricePerHour = 5; // $5 per hour
+const formSchema = z.object({
+  amount: z.preprocess(
+    (val) => parseInt(val as string, 10),
+    z.number().min(1, "Amount must be at least 1")
+  ),
+  hoursRequested: z.preprocess(
+    (val) => parseInt(val as string, 10),
+    z.number().min(1, "Hours must be at least 1")
+  ),
+  paymentProofImage: z.any()
+    .refine((file) => file instanceof File, "Payment proof image is required")
+    .refine((file) => file instanceof File && file.size <= 5000000, "Max file size is 5MB")
+});
 
-const PaymentRequest = () => {
-  const { user } = useAuth();
-  const [selectedHours, setSelectedHours] = useState(5);
-  const [totalPrice, setTotalPrice] = useState(25);
-  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+interface PaymentRequestProps {
+  member: Member;
+  onRequestSubmit?: () => void;
+}
 
-  const handleHoursChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const hours = parseInt(e.target.value, 10);
-    setSelectedHours(hours);
-    setTotalPrice(hours * pricePerHour);
+const PaymentRequestComponent: React.FC<PaymentRequestProps> = ({ member, onRequestSubmit }) => {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [hourlyRate, setHourlyRate] = useState<number>(5); // Default hourly rate
+  
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      amount: 0,
+      hoursRequested: 0,
+      paymentProofImage: undefined
+    }
+  });
+
+  const updateAmount = (hours: number) => {
+    const amount = hours * hourlyRate;
+    form.setValue("amount", amount);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setUploadedImage(file);
+  const updateHours = (amount: number) => {
+    const hours = Math.floor(amount / hourlyRate);
+    form.setValue("hoursRequested", hours);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      form.setValue("paymentProofImage", file);
       
-      // Create preview
+      // Create preview URL
       const reader = new FileReader();
-      reader.onload = (event) => {
-        setUploadPreview(event.target?.result as string);
+      reader.onloadend = () => {
+        setPreviewUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!uploadedImage && !uploadPreview) {
-      toast.error("Please upload a payment screenshot");
-      return;
-    }
-
-    if (!user) {
-      toast.error("You must be logged in to submit a payment");
-      return;
-    }
-
-    setIsSubmitting(true);
-    
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       await paymentService.submitPaymentRequest({
-        memberId: user.id,
-        memberName: user.name,
-        amount: totalPrice,
-        hoursRequested: selectedHours,
-        paymentProofImage: uploadedImage || uploadPreview || "",
+        memberId: member.id,
+        memberName: member.name,
+        amount: values.amount,
+        hoursRequested: values.hoursRequested,
+        paymentProofImage: values.paymentProofImage
       });
       
+      toast.success("Payment request submitted successfully");
+      
       // Reset form
-      setUploadedImage(null);
-      setUploadPreview(null);
-      setSelectedHours(5);
-      setTotalPrice(25);
+      form.reset();
+      setPreviewUrl(null);
+      
+      // Notify parent component if needed
+      if (onRequestSubmit) {
+        onRequestSubmit();
+      }
     } catch (error) {
-      console.error("Error submitting payment:", error);
-      toast.error("Failed to submit payment. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+      toast.error("Failed to submit payment request");
     }
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Request Additional Hours</CardTitle>
+        <CardTitle className="flex items-center">
+          <CreditCard className="mr-2 h-5 w-5" />
+          Request More Hours
+        </CardTitle>
         <CardDescription>
-          Choose the number of hours and upload your payment proof
+          Submit a payment request to add more hours to your account
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="hours">Number of Hours</Label>
-              <div className="flex items-center gap-4 mt-1.5">
-                <Input
-                  id="hours"
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={selectedHours}
-                  onChange={handleHoursChange}
-                  className="w-24"
-                />
-                <span className="text-muted-foreground">× ${pricePerHour}/hour</span>
-                <span className="ml-auto font-semibold text-lg">${totalPrice.toFixed(2)}</span>
-              </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="hoursRequested"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Hours Requested</FormLabel>
+                    <div className="flex space-x-2">
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          placeholder="10" 
+                          {...field} 
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value);
+                            field.onChange(value);
+                            if (!isNaN(value)) {
+                              updateAmount(value);
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <Button 
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10"
+                        onClick={() => {
+                          const value = (field.value || 0) + 1;
+                          field.onChange(value);
+                          updateAmount(value);
+                        }}
+                      >
+                        <Calculator className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <FormDescription>
+                      How many hours do you want to add?
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Amount to Pay</FormLabel>
+                    <div className="flex">
+                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
+                        $
+                      </span>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          placeholder="50" 
+                          className="rounded-l-none"
+                          {...field} 
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value);
+                            field.onChange(value);
+                            if (!isNaN(value)) {
+                              updateHours(value);
+                            }
+                          }}
+                        />
+                      </FormControl>
+                    </div>
+                    <FormDescription>
+                      Based on ${hourlyRate} per hour rate
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
-            <div className="pt-4 border-t">
-              <Label htmlFor="payment-proof" className="block mb-3">
-                Upload Payment Screenshot
-              </Label>
-              <div className="grid gap-4">
-                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center hover:bg-muted/50 transition-colors relative">
-                  {uploadPreview ? (
-                    <div className="relative">
+            <div>
+              <FormLabel htmlFor="paymentProof">Payment Proof</FormLabel>
+              <div className="mt-2">
+                <Label 
+                  htmlFor="paymentProof" 
+                  className="flex justify-center w-full h-32 px-4 transition bg-white border-2 border-gray-300 border-dashed rounded-md appearance-none cursor-pointer hover:border-gray-400 focus:outline-none"
+                >
+                  {previewUrl ? (
+                    <div className="w-full h-full flex items-center justify-center">
                       <img 
-                        src={uploadPreview} 
-                        alt="Payment proof" 
-                        className="max-h-[300px] mx-auto rounded-md object-contain" 
+                        src={previewUrl} 
+                        alt="Payment proof preview" 
+                        className="max-h-full max-w-full object-contain"
                       />
-                      <button 
-                        type="button" 
-                        onClick={() => {
-                          setUploadedImage(null);
-                          setUploadPreview(null);
-                        }}
-                        className="absolute top-2 right-2 bg-background/80 p-1 rounded-full"
-                      >
-                        ×
-                      </button>
                     </div>
                   ) : (
-                    <>
-                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
-                      <p className="text-sm text-muted-foreground mb-1">
-                        Drag and drop or click to upload
+                    <span className="flex flex-col items-center justify-center pt-5 pb-6">
+                      <Upload className="w-8 h-8 text-gray-400" />
+                      <p className="pt-1 text-sm tracking-wider text-gray-400 group-hover:text-gray-600">
+                        Upload payment proof
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        Supports JPG, PNG or PDF up to 5MB
+                      <p className="text-xs text-gray-500">
+                        PNG, JPG up to 5MB
                       </p>
-                    </>
+                    </span>
                   )}
-                  <Input
-                    id="payment-proof"
-                    type="file"
-                    accept="image/*,.pdf"
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    onChange={handleImageUpload}
-                  />
-                </div>
+                </Label>
+                <input
+                  id="paymentProof"
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                />
+                {form.formState.errors.paymentProofImage && (
+                  <p className="text-sm font-medium text-destructive mt-2">
+                    {form.formState.errors.paymentProofImage.message as string}
+                  </p>
+                )}
               </div>
             </div>
-          </div>
-
-          <Button 
-            type="submit" 
-            className="w-full"
-            disabled={isSubmitting || (!uploadedImage && !uploadPreview)}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 size={16} className="mr-2 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              "Submit Payment Request"
-            )}
-          </Button>
-        </form>
+            
+            <div className="flex justify-end">
+              <Button type="submit">Submit Payment Request</Button>
+            </div>
+          </form>
+        </Form>
       </CardContent>
     </Card>
   );
 };
 
-export default PaymentRequest;
+export default PaymentRequestComponent;

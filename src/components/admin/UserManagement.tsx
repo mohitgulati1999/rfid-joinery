@@ -1,287 +1,449 @@
 
 import React, { useState } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
 } from "@/components/ui/table";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Member } from "@/types";
-import { Badge } from "@/components/ui/badge";
-import {
-  MoreHorizontal,
-  Plus,
-  UserPlus,
-  Edit,
-  Clock,
-  CreditCard,
-  Search,
-  UserCheck,
-  UserX,
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
+import { 
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogClose
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { 
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Member } from "@/types";
+import { 
+  Edit, 
+  Plus, 
+  AlertTriangle, 
+  UserPlus, 
+  Search,
+  Check,
+  X
+} from "lucide-react";
+import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { memberService } from "@/services/memberService";
+
+const formSchema = z.object({
+  name: z.string().min(2, {
+    message: "Name must be at least 2 characters.",
+  }),
+  email: z.string().email({
+    message: "Please enter a valid email.",
+  }),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  rfidNumber: z.string().regex(/^RF\d{6}$/, {
+    message: "RFID Number must follow format RF followed by 6 digits",
+  }),
+  membershipHours: z.number().min(0),
+  isActive: z.boolean().default(true),
+});
 
 interface UserManagementProps {
   members: Member[];
 }
 
-const UserManagement = ({ members }: UserManagementProps) => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [openAddDialog, setOpenAddDialog] = useState(false);
-  const [openAddHoursDialog, setOpenAddHoursDialog] = useState(false);
+const UserManagement: React.FC<UserManagementProps> = ({ members }) => {
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [hoursToAdd, setHoursToAdd] = useState(5);
+  const [editMode, setEditMode] = useState(false);
+  const [showAddHoursDialog, setShowAddHoursDialog] = useState(false);
+  const [hoursToAdd, setHoursToAdd] = useState(0);
 
-  const filteredMembers = members.filter((member) =>
-    member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    member.rfidNumber.toLowerCase().includes(searchQuery.toLowerCase())
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      address: "",
+      rfidNumber: "RF",
+      membershipHours: 0,
+      isActive: true,
+    },
+  });
+
+  const filteredMembers = members.filter(member => 
+    member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    member.rfidNumber.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAddHours = () => {
-    // In a real app, this would update the user's hours via an API
-    console.log(`Adding ${hoursToAdd} hours to member ${selectedMember?.id}`);
-    setOpenAddHoursDialog(false);
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const handleEdit = (member: Member) => {
+    setSelectedMember(member);
+    form.reset({
+      name: member.name,
+      email: member.email,
+      phone: member.phone || "",
+      address: member.address || "",
+      rfidNumber: member.rfidNumber,
+      membershipHours: member.membershipHours,
+      isActive: member.isActive
+    });
+    setEditMode(true);
+  };
+
+  const handleAddHours = (member: Member) => {
+    setSelectedMember(member);
+    setHoursToAdd(0);
+    setShowAddHoursDialog(true);
+  };
+
+  const submitAddHours = async () => {
+    if (!selectedMember) return;
+    
+    try {
+      await memberService.addHours(selectedMember.id, hoursToAdd);
+      toast.success(`Added ${hoursToAdd} hours to ${selectedMember.name}`);
+      setShowAddHoursDialog(false);
+    } catch (error) {
+      toast.error("Failed to add hours");
+    }
+  };
+
+  const handleDeactivate = (member: Member) => {
+    // Toggle activation status
+    memberService.updateMember(member.id, { isActive: !member.isActive })
+      .then(() => {
+        toast.success(`${member.name} has been ${member.isActive ? 'deactivated' : 'activated'}`);
+      })
+      .catch(error => {
+        toast.error("Failed to update member status");
+      });
+  };
+
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    try {
+      if (editMode && selectedMember) {
+        // Update existing member
+        await memberService.updateMember(selectedMember.id, values);
+        toast.success("Member updated successfully");
+      } else {
+        // Create new member
+        await memberService.addMember({
+          ...values,
+          role: "member",
+          password: "password123", // Default password for testing
+          totalHoursUsed: 0
+        });
+        toast.success("Member added successfully");
+      }
+      form.reset();
+      setEditMode(false);
+      setSelectedMember(null);
+    } catch (error) {
+      toast.error("Failed to save member");
+    }
+  };
+
+  const openAddMemberDialog = () => {
+    setEditMode(false);
+    setSelectedMember(null);
+    form.reset({
+      name: "",
+      email: "",
+      phone: "",
+      address: "",
+      rfidNumber: "RF",
+      membershipHours: 0,
+      isActive: true,
+    });
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search members..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            value={searchTerm}
+            onChange={handleSearch}
+            className="pl-9"
           />
         </div>
-        <Dialog open={openAddDialog} onOpenChange={setOpenAddDialog}>
+        <Dialog>
           <DialogTrigger asChild>
-            <Button className="gap-2">
-              <UserPlus size={16} />
+            <Button onClick={openAddMemberDialog}>
+              <UserPlus className="mr-2 h-4 w-4" />
               Add Member
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Add New Member</DialogTitle>
-              <DialogDescription>
-                Create a new member account and assign an RFID card
-              </DialogDescription>
+              <DialogTitle>{editMode ? "Edit Member" : "Add New Member"}</DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">
-                  Name
-                </Label>
-                <Input
-                  id="name"
-                  placeholder="John Doe"
-                  className="col-span-3"
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="email" className="text-right">
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  placeholder="john@example.com"
-                  className="col-span-3"
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="rfid" className="text-right">
-                  RFID
-                </Label>
-                <Input
-                  id="rfid"
-                  placeholder="RF123456"
-                  className="col-span-3"
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="rfidNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>RFID Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="hours" className="text-right">
-                  Initial Hours
-                </Label>
-                <Input
-                  id="hours"
-                  type="number"
-                  placeholder="10"
-                  className="col-span-3"
+                <FormField
+                  control={form.control}
+                  name="membershipHours"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Membership Hours</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          {...field} 
+                          onChange={e => field.onChange(parseInt(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpenAddDialog(false)}>
-                Cancel
-              </Button>
-              <Button onClick={() => setOpenAddDialog(false)}>Save Member</Button>
-            </DialogFooter>
+                <FormField
+                  control={form.control}
+                  name="isActive"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel>Active Status</FormLabel>
+                        <FormDescription>
+                          Member can check in/out when active
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button type="button" variant="outline">Cancel</Button>
+                  </DialogClose>
+                  <Button type="submit">{editMode ? "Update" : "Add"} Member</Button>
+                </DialogFooter>
+              </form>
+            </Form>
           </DialogContent>
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Members</CardTitle>
-          <CardDescription>
-            Manage daycare members and their RFID cards
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Member</TableHead>
+              <TableHead>RFID</TableHead>
+              <TableHead>Hours</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredMembers.length === 0 ? (
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>RFID Number</TableHead>
-                <TableHead>Hours</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                  No members found
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredMembers.map((member) => (
+            ) : (
+              filteredMembers.map((member) => (
                 <TableRow key={member.id}>
                   <TableCell>
-                    <div className="font-medium">{member.name}</div>
-                    <div className="text-sm text-muted-foreground">{member.email}</div>
+                    <div>
+                      <div className="font-medium">{member.name}</div>
+                      <div className="text-sm text-muted-foreground">{member.email}</div>
+                    </div>
                   </TableCell>
+                  <TableCell className="font-mono">{member.rfidNumber}</TableCell>
                   <TableCell>
-                    <div className="text-sm font-mono">{member.rfidNumber}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{member.membershipHours - member.totalHoursUsed} remaining</div>
-                    <div className="text-sm text-muted-foreground">
-                      {member.totalHoursUsed} used / {member.membershipHours} total
+                    <div>
+                      {member.remainingHours} / {member.membershipHours}
+                      <div className="w-24 h-1.5 bg-secondary rounded-full mt-1">
+                        <div 
+                          className={`h-full rounded-full ${
+                            member.remainingHours / member.membershipHours < 0.2 
+                              ? 'bg-destructive' 
+                              : 'bg-primary'
+                          }`} 
+                          style={{ width: `${(member.remainingHours / member.membershipHours) * 100}%` }}
+                        ></div>
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    {member.isActive ? (
-                      <Badge variant="outline" className="bg-green-50 text-green-700 hover:bg-green-50 border-green-200">
-                        Active
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="bg-red-50 text-red-700 hover:bg-red-50 border-red-200">
-                        Inactive
-                      </Badge>
-                    )}
+                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs ${
+                      member.isActive 
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
+                        : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                    }`}>
+                      {member.isActive ? (
+                        <><Check className="mr-1 h-3 w-3" /> Active</>
+                      ) : (
+                        <><X className="mr-1 h-3 w-3" /> Inactive</>
+                      )}
+                    </span>
                   </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          className="h-8 w-8 p-0"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedMember(member);
-                            setOpenAddHoursDialog(true);
-                          }}
-                          className="cursor-pointer"
-                        >
-                          <Clock className="mr-2 h-4 w-4" />
-                          <span>Add Hours</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer">
-                          <Edit className="mr-2 h-4 w-4" />
-                          <span>Edit Details</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer">
-                          <CreditCard className="mr-2 h-4 w-4" />
-                          <span>View Payments</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {member.isActive ? (
-                          <DropdownMenuItem className="cursor-pointer text-amber-600">
-                            <UserX className="mr-2 h-4 w-4" />
-                            <span>Deactivate</span>
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem className="cursor-pointer text-green-600">
-                            <UserCheck className="mr-2 h-4 w-4" />
-                            <span>Activate</span>
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end space-x-2">
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={() => handleEdit(member)}
+                      >
+                        <Edit className="h-4 w-4" />
+                        <span className="sr-only">Edit</span>
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={() => handleAddHours(member)}
+                      >
+                        <Plus className="h-4 w-4" />
+                        <span className="sr-only">Add Hours</span>
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={() => handleDeactivate(member)}
+                        className={member.isActive ? "text-red-500" : "text-green-500"}
+                      >
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="sr-only">
+                          {member.isActive ? "Deactivate" : "Activate"}
+                        </span>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
-      <Dialog open={openAddHoursDialog} onOpenChange={setOpenAddHoursDialog}>
+      {/* Add Hours Dialog */}
+      <Dialog open={showAddHoursDialog} onOpenChange={setShowAddHoursDialog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Add Hours</DialogTitle>
-            <DialogDescription>
-              Add hours to {selectedMember?.name}'s account
-            </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="add-hours" className="text-right">
-                Hours
-              </Label>
-              <Input
-                id="add-hours"
-                type="number"
-                value={hoursToAdd}
-                onChange={(e) => setHoursToAdd(Number(e.target.value))}
-                min={1}
-                className="col-span-3"
-              />
-            </div>
-            <div className="pl-28">
-              <p className="text-sm text-muted-foreground">Current hours: {selectedMember?.membershipHours}</p>
-              <p className="text-sm font-medium mt-1">
-                New total: {(selectedMember?.membershipHours || 0) + hoursToAdd} hours
-              </p>
-            </div>
+          <div className="py-4">
+            <FormItem>
+              <FormLabel>Hours to Add</FormLabel>
+              <FormControl>
+                <Input 
+                  type="number" 
+                  value={hoursToAdd}
+                  onChange={(e) => setHoursToAdd(Number(e.target.value))}
+                />
+              </FormControl>
+              <FormDescription>
+                Adding hours to {selectedMember?.name}'s account
+              </FormDescription>
+            </FormItem>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenAddHoursDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddHours}>Add Hours</Button>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={submitAddHours}>Add Hours</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
