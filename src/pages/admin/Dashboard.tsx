@@ -62,7 +62,7 @@ const AdminDashboard: React.FC = () => {
       case "payments":
         return <PaymentApprovals />;
       case "rfid":
-        return <RFIDManagement />;
+        return <RFIDManagement members={members} />;
       default:
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

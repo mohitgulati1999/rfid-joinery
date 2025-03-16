@@ -2,14 +2,16 @@
 import React from "react";
 import { Member } from "@/types";
 import { Moon, CreditCard as CreditCardIcon, Cpu, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface CreditCardProps {
   member: Member;
+  className?: string;
 }
 
-const CreditCard = ({ member }: CreditCardProps) => {
+const CreditCard = ({ member, className }: CreditCardProps) => {
   return (
-    <div className="credit-card p-6 w-full max-w-md mx-auto relative overflow-hidden bg-gradient-to-br from-purple-950/90 to-indigo-900/90 shadow-xl rounded-xl backdrop-blur-sm border border-white/10">
+    <div className={cn("credit-card p-6 w-full max-w-md mx-auto relative overflow-hidden bg-gradient-to-br from-purple-950/90 to-indigo-900/90 shadow-xl rounded-xl backdrop-blur-sm border border-white/10", className)}>
       <div className="flex justify-between items-start mb-10">
         <div className="flex items-center space-x-2">
           <Star className="h-6 w-6 text-yellow-400" />

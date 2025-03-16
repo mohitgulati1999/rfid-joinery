@@ -48,6 +48,13 @@ export const paymentService = {
     return [...mockPaymentRequests];
   },
   
+  // Added this method to fix the error
+  getAllPayments: async (): Promise<PaymentRequest[]> => {
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return [...mockPaymentRequests];
+  },
+  
   // Get pending payment requests (admin)
   getPendingPaymentRequests: async (): Promise<PaymentRequest[]> => {
     // Simulate API delay
